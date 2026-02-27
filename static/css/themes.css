@@ -121,9 +121,7 @@ body.dark-mode .periodical-card:hover img {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light'])
-    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
-      [type='button']
-    ),
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']),
   :root:not([data-theme='light']) select,
   :root:not([data-theme='light']) textarea {
     box-shadow:
@@ -132,9 +130,7 @@ body.dark-mode .periodical-card:hover img {
   }
 
   :root:not([data-theme='light'])
-    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
-      [type='button']
-    ):focus,
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']):focus,
   :root:not([data-theme='light']) select:focus,
   :root:not([data-theme='light']) textarea:focus {
     box-shadow:
@@ -145,9 +141,7 @@ body.dark-mode .periodical-card:hover img {
 }
 
 body.dark-mode
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
-    [type='button']
-  ),
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']),
 body.dark-mode select,
 body.dark-mode textarea {
   box-shadow:
@@ -156,9 +150,7 @@ body.dark-mode textarea {
 }
 
 body.dark-mode
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
-    [type='button']
-  ):focus,
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']):focus,
 body.dark-mode select:focus,
 body.dark-mode textarea:focus {
   box-shadow:

@@ -305,7 +305,6 @@
   color: var(--text-primary);
   margin-bottom: var(--space-md);
   padding: var(--space-sm);
-  background: var(--input-bg);
   border: 1px solid var(--border-color);
   background: var(--input-bg);
   border-radius: var(--radius-md);
@@ -946,7 +945,6 @@
 }
 
 .modal-content {
-  background-color: var(--surface);
   padding: 32px;
   border-radius: var(--radius-xl); /* M3 Dialog radius */
   box-shadow: var(--shadow-xl);
@@ -956,7 +954,7 @@
   overflow-y: auto;
   position: relative;
   border: 1px solid var(--border-color);
-  background: var(--surface); /* To separate from background gracefully in some themes */
+  background: var(--surface);
 }
 
 /* Flexbox layout for modals with header/body/footer structure.
@@ -1589,7 +1587,6 @@
 }
 
 .stat-box {
-  background: var(--surface);
   padding: 20px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -1681,7 +1678,6 @@
 .progress-bar-container {
   width: 100%;
   height: 24px;
-  background: var(--background-alt);
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border-color);

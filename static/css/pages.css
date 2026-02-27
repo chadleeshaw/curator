@@ -1730,7 +1730,7 @@
     font-size: 11px !important;
     border-radius: var(--radius-md) !important;
     white-space: normal !important;
-    word-break: break-word !important;
+    overflow-wrap: break-word !important;
     text-align: center !important;
     box-sizing: border-box !important;
     background: var(--surface-variant) !important;
@@ -1966,7 +1966,7 @@
     font-size: 11px !important;
     border-radius: var(--radius-md) !important;
     white-space: normal !important;
-    word-break: break-word !important;
+    overflow-wrap: break-word !important;
     text-align: center !important;
     width: 100% !important;
   }
