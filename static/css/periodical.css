@@ -180,6 +180,12 @@
   box-shadow: var(--shadow-md);
 }
 
+.breadcrumb-logout {
+  margin-left: auto;
+  padding: 6px 14px;
+  font-size: 0.85em;
+}
+
 /* Collapsible header banner (shared by periodical + stacks pages) */
 .collapsible-header {
   transition:

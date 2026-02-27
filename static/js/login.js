@@ -21,10 +21,12 @@ function switchMode(mode) {
 // eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function togglePasswordVisibility(inputId) {
   const input = document.getElementById(inputId);
-  if (input.type === 'password') {
-    input.type = 'text';
-  } else {
-    input.type = 'password';
+  const btn = input.parentElement.querySelector('.toggle-password');
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  if (btn) {
+    btn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+    btn.querySelector('svg use')?.setAttribute('href', isHidden ? '#icon-eye-off' : '#icon-eye');
   }
 }
 

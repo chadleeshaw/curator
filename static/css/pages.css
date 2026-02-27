@@ -666,6 +666,19 @@
   gap: 10px;
 }
 
+/* Tone down the clear/delete button in the filter row — neutral at rest, danger on hover */
+.queue-view .queue-header-row .filter-row .btn-danger {
+  background: var(--surface-variant);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.queue-view .queue-header-row .filter-row .btn-danger:hover {
+  background: var(--error-600);
+  color: white;
+  border-color: var(--error-600);
+}
+
 .queue-view .queue-header-row .filter-row label {
   color: var(--text-secondary);
   font-size: 14px;

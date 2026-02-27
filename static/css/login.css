@@ -189,10 +189,23 @@ body {
   position: relative;
 }
 
+.form-group-password input {
+  padding-right: 48px;
+}
+
 .toggle-password {
   position: absolute;
   right: 12px;
-  top: 38px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
   cursor: pointer;
   color: var(--text-disabled);
   user-select: none;
