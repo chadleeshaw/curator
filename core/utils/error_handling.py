@@ -57,7 +57,7 @@ def handle_api_errors(operation_name: str, logger: logging.Logger):
                 # Log unexpected errors with full traceback
                 logger.error(f"{operation_name} error: {e}", exc_info=True)
                 # Convert to HTTPException for consistent API error format
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="An internal server error occurred")
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> T:
@@ -67,7 +67,7 @@ def handle_api_errors(operation_name: str, logger: logging.Logger):
                 raise
             except Exception as e:
                 logger.error(f"{operation_name} error: {e}", exc_info=True)
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="An internal server error occurred")
 
         # Return appropriate wrapper based on whether function is async
         import inspect

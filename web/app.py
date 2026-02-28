@@ -1076,6 +1076,24 @@ app.add_middleware(
     auth_period=RATE_LIMIT_AUTH_PERIOD,
 )
 
+# Add request body size limit middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response as StarletteResponse
+
+MAX_REQUEST_BODY_SIZE = 50 * 1024 * 1024  # 50MB
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_REQUEST_BODY_SIZE:
+            return StarletteResponse("Request body too large", status_code=413)
+        return await call_next(request)
+
+
+app.add_middleware(RequestSizeLimitMiddleware)
+
 
 @app.get("/api/health")
 async def health_check():

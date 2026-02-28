@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException, Query, Response, UploadFile, File
+from fastapi import Depends, HTTPException, Query, Response, UploadFile, File
 from fastapi.responses import FileResponse
 from PIL import Image
 
@@ -23,9 +23,11 @@ from services.ocr.service import OCRService
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 # Allowed image extensions for cover upload
 ALLOWED_COVER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+MAX_COVER_SIZE = 10 * 1024 * 1024  # 10MB
 
 router = _shared.router
 logger = _shared.logger
@@ -52,6 +54,7 @@ def add_cache_headers(response: Response, max_age: int = 86400) -> Response:
 async def get_cover(
     magazine_id: int,
     thumbnail: bool = Query(default=True, description="Return thumbnail for UI"),
+    _username: str = Depends(get_verify_token),
 ):
     """
     Get magazine cover image.
@@ -92,7 +95,9 @@ def _get_cover_path(db_session, magazine_id):
 
 @router.post("/periodicals/{magazine_id}/regenerate-cover")
 @handle_api_errors("Regenerate cover", logger)
-async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Dict[str, Any]:
+async def regenerate_cover(
+    magazine_id: int, request_data: Dict[str, Any], _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """
     Regenerate cover image from a specific PDF page.
 
@@ -150,7 +155,9 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
 
 @router.post("/periodicals/{magazine_id}/upload-cover")
 @handle_api_errors("Upload cover", logger)
-async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_cover(
+    magazine_id: int, file: UploadFile = File(...), _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """
     Upload a custom cover image for a periodical.
 
@@ -174,6 +181,9 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
 
     # Read file content
     content = await file.read()
+
+    if len(content) > MAX_COVER_SIZE:
+        raise HTTPException(status_code=413, detail="Cover image too large (max 10MB)")
 
     def operation(db):
         periodical = _shared.get_periodical_or_404(db, magazine_id)
@@ -220,7 +230,8 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
         except Exception as e:
             if temp_path.exists():
                 temp_path.unlink()
-            raise HTTPException(status_code=500, detail=f"Failed to save cover: {e}")
+            logger.error("Failed to save cover for periodical: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to save cover image")
 
         # Store old cover path before updating (for thumbnail cleanup)
         old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
@@ -253,7 +264,7 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
 
 @router.post("/periodicals/{magazine_id}/regenerate-thumbnail-ocr")
 @handle_api_errors("Regenerate thumbnail and OCR", logger)
-async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
+async def regenerate_thumbnail_ocr(magazine_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Regenerate cover thumbnail and queue OCR for a single periodical.
 
