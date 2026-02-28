@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 from models.database import Base
 from web.routers import imports
+from web.routers.auth import get_verify_token
 
 
 @pytest.fixture
@@ -56,6 +57,7 @@ def test_app(test_db, mock_file_importer):
 
     app = FastAPI(title="Test App")
     app.include_router(imports.router)
+    app.dependency_overrides[get_verify_token] = lambda: "test_user"
     return app
 
 

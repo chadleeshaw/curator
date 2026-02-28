@@ -17,6 +17,7 @@ from models.database import Base, Periodical, PeriodicalTracking
 
 # Import the periodicals router package
 from web.routers.periodicals import _shared
+from web.routers.auth import get_verify_token
 
 # Ensure bulk module routes are registered
 import web.routers.periodicals.bulk  # noqa: F401
@@ -52,6 +53,7 @@ def test_app(test_db, tmp_path):
 
     app = FastAPI(title="Test Bulk Operations")
     app.include_router(_shared.router)
+    app.dependency_overrides[get_verify_token] = lambda: "test_user"
     return app
 
 

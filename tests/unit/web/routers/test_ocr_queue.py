@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from models.database import Base, OCRJob, Periodical
 from web.routers import ocr_queue
+from web.routers.auth import get_verify_token
 
 
 @pytest.fixture
@@ -91,6 +92,7 @@ class TestGetOcrQueue:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.get("/api/ocr/queue")
@@ -137,6 +139,7 @@ class TestGetOcrQueue:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.get("/api/ocr/queue?status=pending")
@@ -171,6 +174,7 @@ class TestGetOcrStats:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.get("/api/ocr/queue/stats")
@@ -203,6 +207,7 @@ class TestRetryOcrJob:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.post(f"/api/ocr/retry/{job_id}")
@@ -220,6 +225,7 @@ class TestRetryOcrJob:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.post("/api/ocr/retry/99999")
@@ -250,6 +256,7 @@ class TestClearFailedOcrJobs:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.delete("/api/ocr/queue/failed")
@@ -283,6 +290,7 @@ class TestClearPendingOcrJobs:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.delete("/api/ocr/queue")
@@ -312,6 +320,7 @@ class TestDeleteOcrJob:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.delete(f"/api/ocr/queue/{job_id}")
@@ -329,6 +338,7 @@ class TestDeleteOcrJob:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.delete("/api/ocr/queue/99999")
@@ -348,6 +358,7 @@ class TestQueueMagazineOcr:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.post(f"/api/ocr/queue/{sample_periodical}")
@@ -365,6 +376,7 @@ class TestQueueMagazineOcr:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.post("/api/ocr/queue/99999")
@@ -380,6 +392,7 @@ class TestQueueMagazineOcr:
 
         app = FastAPI()
         app.include_router(ocr_queue.router)
+        app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
         with TestClient(app) as client:
             response = client.post(f"/api/ocr/queue/{sample_periodical}?priority=5")

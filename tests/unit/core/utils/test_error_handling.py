@@ -86,7 +86,7 @@ class TestHandleApiErrors:
 
         # Verify exception is converted to HTTPException
         assert exc_info.value.status_code == 500
-        assert "Something went wrong" in str(exc_info.value.detail)
+        assert "An internal server error occurred" in str(exc_info.value.detail)
 
         # Verify error was logged
         logger.error.assert_called_once()
@@ -139,7 +139,7 @@ class TestHandleApiErrors:
 
         # Verify
         assert exc_info.value.status_code == 500
-        assert "Sync error" in str(exc_info.value.detail)
+        assert "An internal server error occurred" in str(exc_info.value.detail)
         logger.error.assert_called_once()
 
     def test_preserves_function_name(self):

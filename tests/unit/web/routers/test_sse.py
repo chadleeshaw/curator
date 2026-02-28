@@ -4,20 +4,22 @@ Test suite for Server-Sent Events router and EventBus.
 Covers:
 - EventBus subscribe / unsubscribe / publish behavior
 - QueueFull drop semantics (slow clients)
-- SSE endpoints: auth (valid token, invalid token, missing token)
+- SSE endpoints: auth (valid ticket, invalid ticket, missing ticket)
 - SSE endpoints: 503 when event bus not ready
 - SSE endpoints: correct media type and headers
 - _event_stream: events filtered by channel
 - _event_stream: keepalive emitted on timeout
 - _event_stream: unsubscribe called on CancelledError (client disconnect)
-- _verify_token: empty token, None auth_manager, JWT token, API token
+- _validate_ticket: expired ticket, unknown ticket, valid ticket consumed on use
 - background_tasks: download_monitoring_task always publishes
 - background_tasks: ocr_processing_task publishes only when processed > 0
 """
 
 import asyncio
 import json
+import time
 import unittest.mock
+import uuid
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -191,46 +193,60 @@ class TestEventBusPublish:
 
 
 # =============================================================================
-# _verify_token unit tests (tested through the module-level helper)
+# _validate_ticket unit tests
 # =============================================================================
 
 
-class TestVerifyToken:  # pylint: disable=attribute-defined-outside-init
-    """Test the _verify_token helper in isolation."""
+class TestValidateTicket:  # pylint: disable=attribute-defined-outside-init
+    """Test the _validate_ticket helper in isolation."""
 
     def setup_method(self):
-        """Restore sse module state between tests."""
-        self._orig_bus = sse_module._event_bus
-        self._orig_auth = sse_module._auth_manager
+        """Clear all tickets before each test."""
+        self._orig_tickets = dict(sse_module._tickets)
+        sse_module._tickets.clear()
 
     def teardown_method(self):
-        sse_module._event_bus = self._orig_bus
-        sse_module._auth_manager = self._orig_auth
+        """Restore original tickets dict after each test."""
+        sse_module._tickets.clear()
+        sse_module._tickets.update(self._orig_tickets)
 
-    def test_returns_false_when_auth_manager_is_none(self):
-        """No auth manager → always False (dependency not initialized)."""
-        sse_module._auth_manager = None
-        assert sse_module._verify_token("any-token") is False
+    def test_raises_401_for_unknown_ticket(self):
+        """Ticket that was never issued raises HTTPException(401)."""
+        import pytest
+        from fastapi import HTTPException
 
-    def test_returns_false_for_empty_string_token(self, mock_auth_manager):
-        """Empty token string → False without calling auth manager."""
-        sse_module._auth_manager = mock_auth_manager
-        assert sse_module._verify_token("") is False
+        with pytest.raises(HTTPException) as exc_info:
+            sse_module._validate_ticket("not-a-real-ticket")
+        assert exc_info.value.status_code == 401
 
-    def test_returns_true_for_valid_jwt_token(self, mock_auth_manager):
-        """Valid JWT token accepted via verify_token."""
-        sse_module._auth_manager = mock_auth_manager
-        assert sse_module._verify_token("valid-token") is True
+    def test_raises_401_for_expired_ticket(self):
+        """Ticket older than _TICKET_TTL raises HTTPException(401)."""
+        import pytest
+        from fastapi import HTTPException
 
-    def test_returns_true_for_valid_api_token(self, mock_auth_manager):
-        """API token accepted as fallback when JWT verification fails."""
-        sse_module._auth_manager = mock_auth_manager
-        assert sse_module._verify_token("valid-api-token") is True
+        ticket = str(uuid.uuid4())
+        # Set timestamp far in the past
+        sse_module._tickets[ticket] = time.time() - sse_module._TICKET_TTL - 10
+        with pytest.raises(HTTPException) as exc_info:
+            sse_module._validate_ticket(ticket)
+        assert exc_info.value.status_code == 401
 
-    def test_returns_false_for_invalid_token(self, mock_auth_manager):
-        """Unrecognized token → False."""
-        sse_module._auth_manager = mock_auth_manager
-        assert sse_module._verify_token("bogus-token") is False
+    def test_valid_ticket_is_consumed_on_use(self):
+        """A valid ticket is deleted after a single successful validation."""
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
+        sse_module._validate_ticket(ticket)  # should not raise
+        assert ticket not in sse_module._tickets
+
+    def test_expired_tickets_are_purged_on_validation(self):
+        """Calling _validate_ticket purges other expired tickets from the store."""
+        expired = str(uuid.uuid4())
+        valid = str(uuid.uuid4())
+        sse_module._tickets[expired] = time.time() - sse_module._TICKET_TTL - 10
+        sse_module._tickets[valid] = time.time()
+        sse_module._validate_ticket(valid)  # triggers purge + consumes valid
+        assert expired not in sse_module._tickets
+        assert valid not in sse_module._tickets
 
 
 # =============================================================================
@@ -239,22 +255,30 @@ class TestVerifyToken:  # pylint: disable=attribute-defined-outside-init
 
 
 class TestSSEDownloadsEndpointAuth:
-    """GET /api/sse/downloads — token and readiness validation."""
+    """GET /api/sse/downloads — ticket and readiness validation."""
 
-    def test_missing_token_returns_422(self, sse_client):
-        """Omitting the required `token` query parameter returns 422."""
+    def setup_method(self):
+        """Clear tickets before each test."""
+        sse_module._tickets.clear()
+
+    def teardown_method(self):
+        """Clear tickets after each test."""
+        sse_module._tickets.clear()
+
+    def test_missing_ticket_returns_422(self, sse_client):
+        """Omitting the required `ticket` query parameter returns 422."""
         response = sse_client.get("/api/sse/downloads")
         assert response.status_code == 422
 
-    def test_invalid_token_returns_401(self, sse_client):
-        """An unrecognized token returns 401 Unauthorized."""
-        response = sse_client.get("/api/sse/downloads?token=bad-token")
+    def test_invalid_ticket_returns_401(self, sse_client):
+        """An unrecognized ticket returns 401 Unauthorized."""
+        response = sse_client.get("/api/sse/downloads?ticket=not-a-valid-uuid")
         assert response.status_code == 401
         data = response.json()
-        assert "token" in data["detail"].lower() or "invalid" in data["detail"].lower()
+        assert "ticket" in data["detail"].lower() or "invalid" in data["detail"].lower()
 
-    def test_valid_token_does_not_return_401_or_503(self, sse_client):
-        """A valid token passes authentication (no 401/503 response).
+    def test_valid_ticket_does_not_return_401_or_503(self, sse_client):
+        """A valid ticket passes authentication (no 401/503 response).
 
         _sse_response is patched so the streaming generator never runs,
         preventing the TestClient from blocking indefinitely.
@@ -265,12 +289,14 @@ class TestSSEDownloadsEndpointAuth:
             return
             yield  # make it an async generator
 
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
         with patch.object(
             sse_module,
             "_sse_response",
             return_value=StreamingResponse(_empty_stream(), media_type="text/event-stream"),
         ):
-            response = sse_client.get("/api/sse/downloads?token=valid-token")
+            response = sse_client.get(f"/api/sse/downloads?ticket={ticket}")
 
         assert response.status_code not in (401, 403, 503)
 
@@ -280,8 +306,10 @@ class TestSSEDownloadsEndpointAuth:
         sse_module.set_dependencies(None, mock_auth_manager)
         app.include_router(sse_module.router)
 
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
         with TestClient(app) as client:
-            response = client.get("/api/sse/downloads?token=valid-token")
+            response = client.get(f"/api/sse/downloads?ticket={ticket}")
 
         assert response.status_code == 503
         data = response.json()
@@ -290,7 +318,7 @@ class TestSSEDownloadsEndpointAuth:
         # Restore
         sse_module.set_dependencies(EventBus(), mock_auth_manager)
 
-    def test_valid_token_returns_text_event_stream(self, sse_client):
+    def test_valid_ticket_returns_text_event_stream(self, sse_client):
         """Successful authentication returns text/event-stream content type.
 
         _sse_response is patched so the streaming generator never runs,
@@ -302,6 +330,8 @@ class TestSSEDownloadsEndpointAuth:
             return
             yield
 
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
         with patch.object(
             sse_module,
             "_sse_response",
@@ -311,12 +341,12 @@ class TestSSEDownloadsEndpointAuth:
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             ),
         ):
-            response = sse_client.get("/api/sse/downloads?token=valid-token")
+            response = sse_client.get(f"/api/sse/downloads?ticket={ticket}")
 
         assert response.status_code == 200
         assert "text/event-stream" in response.headers.get("content-type", "")
 
-    def test_valid_token_returns_sse_headers(self, sse_client):
+    def test_valid_ticket_returns_sse_headers(self, sse_client):
         """Successful connection includes required SSE headers.
 
         _sse_response is patched so the streaming generator never runs,
@@ -328,6 +358,8 @@ class TestSSEDownloadsEndpointAuth:
             return
             yield
 
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
         with patch.object(
             sse_module,
             "_sse_response",
@@ -337,7 +369,7 @@ class TestSSEDownloadsEndpointAuth:
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             ),
         ):
-            response = sse_client.get("/api/sse/downloads?token=valid-token")
+            response = sse_client.get(f"/api/sse/downloads?ticket={ticket}")
 
         assert response.headers.get("cache-control") == "no-cache"
         assert response.headers.get("x-accel-buffering") == "no"
@@ -346,18 +378,26 @@ class TestSSEDownloadsEndpointAuth:
 class TestSSEOCREndpointAuth:
     """GET /api/sse/ocr — mirrors download endpoint auth checks."""
 
-    def test_missing_token_returns_422(self, sse_client):
-        """Omitting the required `token` query parameter returns 422."""
+    def setup_method(self):
+        """Clear tickets before each test."""
+        sse_module._tickets.clear()
+
+    def teardown_method(self):
+        """Clear tickets after each test."""
+        sse_module._tickets.clear()
+
+    def test_missing_ticket_returns_422(self, sse_client):
+        """Omitting the required `ticket` query parameter returns 422."""
         response = sse_client.get("/api/sse/ocr")
         assert response.status_code == 422
 
-    def test_invalid_token_returns_401(self, sse_client):
-        """An unrecognized token returns 401 Unauthorized."""
-        response = sse_client.get("/api/sse/ocr?token=garbage")
+    def test_invalid_ticket_returns_401(self, sse_client):
+        """An unrecognized ticket returns 401 Unauthorized."""
+        response = sse_client.get("/api/sse/ocr?ticket=garbage")
         assert response.status_code == 401
 
-    def test_valid_token_does_not_return_401_or_503(self, sse_client):
-        """A valid token passes authentication (no 401/503 response).
+    def test_valid_ticket_does_not_return_401_or_503(self, sse_client):
+        """A valid ticket passes authentication (no 401/503 response).
 
         _sse_response is patched so the streaming generator never runs,
         preventing the TestClient from blocking indefinitely.
@@ -368,12 +408,14 @@ class TestSSEOCREndpointAuth:
             return
             yield
 
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
         with patch.object(
             sse_module,
             "_sse_response",
             return_value=StreamingResponse(_empty_stream(), media_type="text/event-stream"),
         ):
-            response = sse_client.get("/api/sse/ocr?token=valid-token")
+            response = sse_client.get(f"/api/sse/ocr?ticket={ticket}")
 
         assert response.status_code not in (401, 403, 503)
 
@@ -383,8 +425,10 @@ class TestSSEOCREndpointAuth:
         sse_module.set_dependencies(None, mock_auth_manager)
         app.include_router(sse_module.router)
 
+        ticket = str(uuid.uuid4())
+        sse_module._tickets[ticket] = time.time()
         with TestClient(app) as client:
-            response = client.get("/api/sse/ocr?token=valid-token")
+            response = client.get(f"/api/sse/ocr?ticket={ticket}")
 
         assert response.status_code == 503
 

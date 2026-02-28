@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from web.routers import tasks
+from web.routers.auth import get_verify_token
 
 
 @pytest.fixture(scope="module")
@@ -38,6 +39,7 @@ def mock_search_scheduler():
 def test_app(mock_scheduler, mock_search_scheduler):
     """Create test FastAPI app with tasks router"""
     app = FastAPI(title="Test App")
+    app.dependency_overrides[get_verify_token] = lambda: "test_user"
     tasks.set_dependencies(
         session_factory=MagicMock(),
         download_monitor_task=MagicMock(),

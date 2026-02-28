@@ -14,6 +14,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from web.app import app
+from web.routers.auth import get_verify_token
+
+# Bypass auth for performance tests
+app.dependency_overrides[get_verify_token] = lambda: "test_user"
 
 
 @pytest.fixture(scope="module")
