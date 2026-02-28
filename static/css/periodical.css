@@ -804,8 +804,8 @@ body.dark-mode #status-message.status-error {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .issues-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 16px;
-    padding: 0 8px;
     margin-bottom: 30px;
   }
 

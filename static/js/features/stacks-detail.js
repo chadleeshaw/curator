@@ -225,6 +225,23 @@ function createMemberCard(item) {
   } else {
     cover.textContent = item.title;
   }
+
+  // Language overlay on cover (non-English only)
+  if (item.language && item.language !== 'English') {
+    const langOverlay = document.createElement('span');
+    langOverlay.className = 'language-overlay';
+    langOverlay.textContent = item.language;
+    cover.appendChild(langOverlay);
+  }
+
+  // Category overlay on cover
+  if (item.category) {
+    const catOverlay = document.createElement('span');
+    catOverlay.className = 'stack-badge-overlay';
+    catOverlay.textContent = item.category;
+    cover.appendChild(catOverlay);
+  }
+
   card.appendChild(cover);
 
   const info = document.createElement('div');
@@ -234,28 +251,6 @@ function createMemberCard(item) {
   h4.className = 'stack-detail-title';
   h4.textContent = item.title;
   info.appendChild(h4);
-
-  // Badges row
-  const badgesRow = document.createElement('div');
-  badgesRow.className = 'stack-detail-badges';
-
-  if (item.category) {
-    const catBadge = document.createElement('span');
-    catBadge.className = 'stack-detail-category-badge';
-    catBadge.textContent = item.category;
-    badgesRow.appendChild(catBadge);
-  }
-
-  if (item.language && item.language !== 'English') {
-    const langBadge = document.createElement('span');
-    langBadge.className = 'language-badge';
-    langBadge.textContent = item.language;
-    badgesRow.appendChild(langBadge);
-  }
-
-  if (badgesRow.children.length > 0) {
-    info.appendChild(badgesRow);
-  }
 
   // Subtitle with issue info
   const subtitle = document.createElement('p');

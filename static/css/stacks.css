@@ -5,19 +5,18 @@
 /* Wrapper for stack card — positions the "stacked paper" layers and the card */
 .stack-card-wrap {
   position: relative;
-  z-index: 1; /* paint above sibling grid cells so offset layers aren't covered */
-  /* Reserve space for the offset layers so they don't overlap neighbours */
-  margin-right: 10px;
-  margin-bottom: 10px;
-  height: 100%;
+  /* Extra space on right/bottom so pseudo-element layers don't overlap neighbours */
+  padding-right: 10px;
+  padding-bottom: 10px;
 }
 
-/* Remove pseudo-element approach — no ::before/::after on wrap */
-
-/* Real sibling divs that simulate stacked cards behind the main card */
-.stack-layer {
+/* Decorative "stacked paper" layers via pseudo-elements — no extra DOM nodes needed */
+.stack-card-wrap::before,
+.stack-card-wrap::after {
+  content: '';
   position: absolute;
-  inset: 0;
+  /* Match the card's footprint (inside the wrap's padding) */
+  inset: 0 10px 10px 0;
   border-radius: var(--radius-lg);
   background: var(
     --surface-variant,
@@ -28,35 +27,30 @@
   pointer-events: none;
 }
 
-.stack-layer-1 {
+.stack-card-wrap::before {
   transform: translate(5px, 5px);
+  z-index: 1;
 }
 
-.stack-layer-2 {
+.stack-card-wrap::after {
   transform: translate(10px, 10px);
+  z-index: 0;
 }
 
 /* On hover, recolour layers to full primary accent */
-.stack-card-wrap:hover .stack-layer {
+.stack-card-wrap:hover::before,
+.stack-card-wrap:hover::after {
   border-color: var(--primary-color);
 }
 
 /* Stack card modifier — inherits .periodical-card base styles */
 .stack-card {
   position: relative;
+  z-index: 2;
   border-color: var(--border-color);
   transition: border-color var(--transition-fast);
-  /* layout+style contain only — no paint containment */
-  contain: layout style;
-  height: 100%;
   display: flex;
   flex-direction: column;
-}
-
-/* Keep cover top-corners rounded (card overflow:hidden would normally do this,
-   but the card sits above a wrapper so we set it explicitly) */
-.stack-card .periodical-cover {
-  border-radius: 10px 10px 0 0;
 }
 
 /* Highlight the card border on wrapper hover */
@@ -616,6 +610,7 @@
   text-overflow: unset !important;
   white-space: normal !important;
   line-height: 1.35;
+  min-height: calc(1.35em * 2);
   margin-bottom: 6px !important;
 }
 

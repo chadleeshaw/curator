@@ -835,6 +835,11 @@
   }
 
   /* Tracking page - mobile layout */
+  .library-container,
+  .tracking-container {
+    padding: 15px;
+  }
+
   .tracked-header {
     gap: 20px;
   }
@@ -921,7 +926,7 @@
 
   /* Tasks page - mobile layout */
   .tasks-container {
-    padding: 0;
+    padding: 15px;
     max-width: 100%;
     overflow-x: hidden;
   }

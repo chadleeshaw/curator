@@ -821,17 +821,10 @@ export class LibraryManager {
       window.location.href = `/stacks/${stack.slug}`;
     };
 
-    // Wrap in a positioning container. Two real sibling divs act as the
-    // "stacked paper" layers — they sit before the card in DOM order so
-    // they paint behind it without any z-index stacking context tricks.
+    // Wrap in a positioning container. Decorative "stacked paper" layers are
+    // rendered via ::before/::after pseudo-elements on the wrap in CSS.
     const wrap = document.createElement('div');
     wrap.className = 'stack-card-wrap';
-    const layer1 = document.createElement('div');
-    layer1.className = 'stack-layer stack-layer-1';
-    const layer2 = document.createElement('div');
-    layer2.className = 'stack-layer stack-layer-2';
-    wrap.appendChild(layer2); // deepest first
-    wrap.appendChild(layer1);
     wrap.appendChild(card);
 
     return wrap;
