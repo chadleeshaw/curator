@@ -54,7 +54,6 @@ def add_cache_headers(response: Response, max_age: int = 86400) -> Response:
 async def get_cover(
     magazine_id: int,
     thumbnail: bool = Query(default=True, description="Return thumbnail for UI"),
-    _username: str = Depends(get_verify_token),
 ):
     """
     Get magazine cover image.
