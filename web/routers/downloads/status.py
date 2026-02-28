@@ -4,7 +4,7 @@ Download status query endpoints
 
 from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
@@ -12,11 +12,14 @@ from models.database import DownloadSubmission, PeriodicalTracking
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 
 @_shared.router.get("/status/{tracking_id}")
 @handle_api_errors("Get download status for tracking", _shared.logger)
-async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
+async def get_download_status_for_tracking(
+    tracking_id: int, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Get download status for all submissions of a tracked periodical"""
 
     def operation(db):
@@ -64,7 +67,7 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
 
 @_shared.router.get("/completed")
 @handle_api_errors("Get completed downloads", _shared.logger)
-async def get_completed_downloads() -> Dict[str, Any]:
+async def get_completed_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Get all completed downloads"""
 
     def operation(db):

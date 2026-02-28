@@ -11,7 +11,7 @@ Provides endpoints for:
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import sessionmaker
 
@@ -20,6 +20,7 @@ from core.utils.error_handling import handle_api_errors
 from models.database import DiscoveredIssue, DownloadStatus, PeriodicalTracking
 from services import IssueDiscoveryService, SearchScheduler
 from web.utils.responses import success_response
+from web.routers.auth import get_verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ async def list_discovered_issues(
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     sort: str = Query("priority", description="Sort field: priority, first_seen, last_seen"),
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     List discovered issues with optional filters.
@@ -150,7 +152,7 @@ async def list_discovered_issues(
 
 @router.get("/{issue_id}")
 @handle_api_errors("Get discovered issue", logger)
-async def get_discovered_issue(issue_id: int) -> Dict[str, Any]:
+async def get_discovered_issue(issue_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get details for a specific discovered issue.
 
@@ -199,7 +201,9 @@ async def get_discovered_issue(issue_id: int) -> Dict[str, Any]:
 @router.post("/{issue_id}/retry")
 @handle_api_errors("Retry discovered issue", logger)
 async def retry_discovered_issue(
-    issue_id: int, reset_attempts: bool = Query(True, description="Reset attempt count")
+    issue_id: int,
+    reset_attempts: bool = Query(True, description="Reset attempt count"),
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Manually retry a permanently_failed issue (admin override).
@@ -235,7 +239,7 @@ async def retry_discovered_issue(
 
 @router.get("/stats/summary")
 @handle_api_errors("Get discovery statistics", logger)
-async def get_discovery_statistics() -> Dict[str, Any]:
+async def get_discovery_statistics(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get overall statistics for the Issue Discovery & Tracking system.
 
@@ -328,7 +332,7 @@ async def get_discovery_statistics() -> Dict[str, Any]:
 
 @router.get("/stats/by-tracking")
 @handle_api_errors("Get statistics by tracking", logger)
-async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
+async def get_statistics_by_tracking(_username: str = Depends(get_verify_token)) -> Dict[str, List[Dict[str, Any]]]:
     """
     Get discovery statistics grouped by tracked periodical.
 
@@ -402,7 +406,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
 
 @router.post("/reset-all-search-intervals")
 @handle_api_errors("Reset all search intervals", logger)
-async def reset_all_search_intervals() -> Dict[str, Any]:
+async def reset_all_search_intervals(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Reset all tracked periodicals to the normal search interval.
 

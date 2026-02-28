@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import sessionmaker
 
 from core.constants.errors import ErrorMessages
@@ -11,6 +11,8 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import OCRJob, Periodical
 from services.ocr.queue import OCRQueueService
+
+from web.routers.auth import get_verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ def set_dependencies(session_factory: sessionmaker) -> None:
 
 @router.get("/queue")
 @handle_api_errors("Get OCR queue", logger)
-async def get_ocr_queue(status: Optional[str] = None):
+async def get_ocr_queue(status: Optional[str] = None, _username: str = Depends(get_verify_token)):
     """
     Get OCR queue with optional status filter.
 
@@ -117,7 +119,7 @@ async def get_ocr_queue(status: Optional[str] = None):
 
 @router.get("/queue/stats")
 @handle_api_errors("Get OCR stats", logger)
-async def get_ocr_stats():
+async def get_ocr_stats(_username: str = Depends(get_verify_token)):
     """
     Get OCR queue statistics.
 
@@ -136,7 +138,7 @@ async def get_ocr_stats():
 
 @router.post("/retry/{job_id}")
 @handle_api_errors("Retry OCR job", logger)
-async def retry_ocr_job(job_id: int):
+async def retry_ocr_job(job_id: int, _username: str = Depends(get_verify_token)):
     """
     Retry a failed OCR job.
 
@@ -184,7 +186,7 @@ async def retry_ocr_job(job_id: int):
 
 @router.delete("/queue/failed")
 @handle_api_errors("Clear failed OCR jobs", logger)
-async def clear_failed_ocr_jobs():
+async def clear_failed_ocr_jobs(_username: str = Depends(get_verify_token)):
     """
     Clear all failed OCR jobs from the queue.
     This is useful for cleaning up jobs that have repeatedly failed.
@@ -215,7 +217,7 @@ async def clear_failed_ocr_jobs():
 
 @router.delete("/queue")
 @handle_api_errors("Clear pending OCR jobs", logger)
-async def clear_pending_ocr_jobs():
+async def clear_pending_ocr_jobs(_username: str = Depends(get_verify_token)):
     """
     Clear all pending OCR jobs from the queue.
     This is useful when OCR is disabled to clean up the queue.
@@ -246,7 +248,7 @@ async def clear_pending_ocr_jobs():
 
 @router.delete("/queue/pending")
 @handle_api_errors("Clear pending OCR jobs", logger)
-async def clear_pending_ocr_jobs_by_status():
+async def clear_pending_ocr_jobs_by_status(_username: str = Depends(get_verify_token)):
     """
     Clear all pending OCR jobs from the queue (explicit /pending path).
 
@@ -256,12 +258,12 @@ async def clear_pending_ocr_jobs_by_status():
     Returns:
         Number of jobs cleared
     """
-    return await clear_pending_ocr_jobs()
+    return await clear_pending_ocr_jobs(_username)
 
 
 @router.delete("/queue/completed")
 @handle_api_errors("Clear completed OCR jobs", logger)
-async def clear_completed_ocr_jobs():
+async def clear_completed_ocr_jobs(_username: str = Depends(get_verify_token)):
     """
     Clear all completed OCR jobs from the queue.
 
@@ -290,7 +292,7 @@ async def clear_completed_ocr_jobs():
 
 @router.delete("/queue/processing")
 @handle_api_errors("Clear processing OCR jobs", logger)
-async def clear_processing_ocr_jobs():
+async def clear_processing_ocr_jobs(_username: str = Depends(get_verify_token)):
     """
     Clear all processing OCR jobs from the queue.
     This will cancel any jobs currently being processed.
@@ -320,7 +322,7 @@ async def clear_processing_ocr_jobs():
 
 @router.delete("/queue/all")
 @handle_api_errors("Clear all OCR jobs", logger)
-async def clear_all_ocr_jobs():
+async def clear_all_ocr_jobs(_username: str = Depends(get_verify_token)):
     """
     Clear all OCR jobs from the queue.
 
@@ -349,7 +351,7 @@ async def clear_all_ocr_jobs():
 
 @router.delete("/queue/{job_id}")
 @handle_api_errors("Delete OCR job", logger)
-async def delete_ocr_job(job_id: int):
+async def delete_ocr_job(job_id: int, _username: str = Depends(get_verify_token)):
     """
     Delete an OCR job from the queue.
     This will cancel processing jobs and remove pending/failed jobs.
@@ -384,7 +386,9 @@ async def delete_ocr_job(job_id: int):
 
 @router.post("/queue/{magazine_id}")
 @handle_api_errors("Queue periodical OCR", logger)
-async def queue_periodical_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
+async def queue_periodical_ocr(
+    magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value, _username: str = Depends(get_verify_token)
+):
     """
     Manually queue OCR for a periodical.
 

@@ -5,7 +5,7 @@ Download queue operation endpoints (retry, delete, cleanup)
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
@@ -14,11 +14,12 @@ from models.database import DownloadSubmission
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 
 @_shared.router.post("/queue/retry/{submission_id}")
 @handle_api_errors("Retry download", _shared.logger)
-async def retry_download(submission_id: int) -> Dict[str, Any]:
+async def retry_download(submission_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Retry a failed download submission"""
     if not _shared._download_manager:
         raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
@@ -40,7 +41,7 @@ async def retry_download(submission_id: int) -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/pending")
 @handle_api_errors("Clear pending downloads", _shared.logger)
-async def clear_pending_downloads() -> Dict[str, Any]:
+async def clear_pending_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all pending downloads from the queue"""
 
     def operation(db):
@@ -82,7 +83,7 @@ async def clear_pending_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/queued")
 @handle_api_errors("Clear queued downloads", _shared.logger)
-async def clear_queued_downloads() -> Dict[str, Any]:
+async def clear_queued_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all queued downloads from the queue"""
 
     def operation(db):
@@ -112,7 +113,7 @@ async def clear_queued_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/failed")
 @handle_api_errors("Clear failed downloads", _shared.logger)
-async def clear_failed_downloads() -> Dict[str, Any]:
+async def clear_failed_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all failed downloads from the queue"""
 
     def operation(db):
@@ -142,7 +143,7 @@ async def clear_failed_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/completed")
 @handle_api_errors("Clear completed downloads", _shared.logger)
-async def clear_completed_downloads() -> Dict[str, Any]:
+async def clear_completed_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all completed downloads from the queue"""
 
     def operation(db):
@@ -170,7 +171,7 @@ async def clear_completed_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/downloading")
 @handle_api_errors("Clear downloading downloads", _shared.logger)
-async def clear_downloading_downloads() -> Dict[str, Any]:
+async def clear_downloading_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all downloading downloads from the queue"""
 
     def operation(db):
@@ -211,7 +212,7 @@ async def clear_downloading_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/skipped")
 @handle_api_errors("Clear skipped downloads", _shared.logger)
-async def clear_skipped_downloads() -> Dict[str, Any]:
+async def clear_skipped_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all skipped downloads from the queue"""
 
     def operation(db):
@@ -239,7 +240,7 @@ async def clear_skipped_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/all")
 @handle_api_errors("Clear all downloads", _shared.logger)
-async def clear_all_downloads() -> Dict[str, Any]:
+async def clear_all_downloads(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Clear all downloads from the queue"""
 
     def operation(db):
@@ -280,7 +281,7 @@ async def clear_all_downloads() -> Dict[str, Any]:
 
 @_shared.router.delete("/queue/{submission_id}")
 @handle_api_errors("Delete from queue", _shared.logger)
-async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
+async def delete_from_queue(submission_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Remove a submission from the download queue"""
 
     def operation(db):
@@ -299,7 +300,9 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
 
 @_shared.router.post("/queue/cleanup")
 @handle_api_errors("Cleanup old submissions", _shared.logger)
-async def cleanup_old_submissions(days_old: int = 30, status_filter: str = None) -> Dict[str, Any]:
+async def cleanup_old_submissions(
+    days_old: int = 30, status_filter: str = None, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Clean up old download submissions"""
 
     def operation(db):

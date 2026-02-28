@@ -6,13 +6,14 @@ import logging
 import re
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import Periodical, PeriodicalTracking, Stack, StackMembership
 from web.utils.responses import success_response
+from web.routers.auth import get_verify_token
 
 
 class CreateStackRequest(BaseModel):
@@ -156,7 +157,7 @@ def _get_stack_member_count(db, stack_id: int) -> int:
 
 @router.get("/stacks")
 @handle_api_errors("List stacks", logger)
-async def list_stacks() -> Dict[str, Any]:
+async def list_stacks(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     List all stacks with member counts and preview covers.
 
@@ -183,6 +184,7 @@ async def list_stacks() -> Dict[str, Any]:
 @handle_api_errors("Create stack", logger)
 async def create_stack(
     body: CreateStackRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Create a new stack.
@@ -232,7 +234,7 @@ async def create_stack(
 
 @router.get("/stacks/{slug}")
 @handle_api_errors("Get stack details", logger)
-async def get_stack(slug: str) -> Dict[str, Any]:
+async def get_stack(slug: str, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get stack details with full member list.
 
@@ -310,6 +312,7 @@ async def get_stack(slug: str) -> Dict[str, Any]:
 async def update_stack(
     slug: str,
     body: UpdateStackRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Update a stack's properties.
@@ -361,7 +364,7 @@ async def update_stack(
 
 @router.delete("/stacks/{slug}")
 @handle_api_errors("Delete stack", logger)
-async def delete_stack(slug: str) -> Dict[str, Any]:
+async def delete_stack(slug: str, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Delete a stack. Members become ungrouped (not deleted).
 
@@ -399,6 +402,7 @@ class AddMembersRequest(BaseModel):
 async def add_members(
     slug: str,
     body: AddMembersRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Add items to a stack.
@@ -491,7 +495,7 @@ async def add_members(
 
 @router.delete("/stacks/{slug}/members/{membership_id}")
 @handle_api_errors("Remove stack member", logger)
-async def remove_member(slug: str, membership_id: int) -> Dict[str, Any]:
+async def remove_member(slug: str, membership_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Remove an item from a stack.
 
@@ -529,7 +533,7 @@ async def remove_member(slug: str, membership_id: int) -> Dict[str, Any]:
 
 @router.get("/stacks/{slug}/library")
 @handle_api_errors("Get stack library items", logger)
-async def get_stack_library(slug: str) -> Dict[str, Any]:
+async def get_stack_library(slug: str, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get all library periodicals that belong to this stack (for the stack detail page).
     Returns periodicals grouped the same way as the main library endpoint.

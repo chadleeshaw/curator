@@ -181,7 +181,8 @@ def get_periodical_with_file(db_session: Session, periodical_id: int) -> Tuple:
     try:
         file_path = resolve_file_path(magazine.file_path)
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Periodical file not found for id=%s: %s", periodical_id, e)
+        raise HTTPException(status_code=404, detail="Periodical file not found")
 
     return magazine, file_path
 

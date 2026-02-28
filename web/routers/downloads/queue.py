@@ -4,6 +4,7 @@ Download queue listing and monitoring endpoints
 
 from typing import Any, Dict, Optional
 
+from fastapi import Depends
 
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
@@ -11,18 +12,23 @@ from models.database import DownloadSubmission, PeriodicalTracking
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 
 @_shared.router.get("/queue")
-async def get_download_queue_default(status: Optional[str] = None) -> Dict[str, Any]:
+async def get_download_queue_default(
+    status: Optional[str] = None, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Get all download submissions (default endpoint), optionally filtered by status"""
     # Just call the /queue/all endpoint to avoid code duplication
-    return await get_download_queue_all(status)
+    return await get_download_queue_all(status, _username)
 
 
 @_shared.router.get("/queue/all")
 @handle_api_errors("Get download queue", _shared.logger)
-async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]:
+async def get_download_queue_all(
+    status: Optional[str] = None, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Get all download submissions, optionally filtered by status"""
 
     def operation(db):
@@ -102,7 +108,7 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
 
 @_shared.router.get("/queue/status")
 @handle_api_errors("Get download queue status", _shared.logger)
-async def get_download_queue_status() -> Dict[str, Any]:
+async def get_download_queue_status(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Get download queue status including available slots"""
 
     def operation(db):

@@ -6,12 +6,14 @@ import logging
 import os
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter
+
+from fastapi import APIRouter, Depends, Header
 
 from core.constants.files import BYTES_PER_MB
 from core.utils.error_handling import handle_api_errors
 from core.utils import run_in_thread
 from web.utils.responses import success_response, error_response
+from web.routers.auth import get_auth_middleware, get_verify_token
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 logger = logging.getLogger(__name__)
@@ -62,7 +64,7 @@ def set_dependencies(
 
 @router.get("/status")
 @handle_api_errors("Get tasks status", logger)
-async def get_tasks_status():
+async def get_tasks_status(_username: str = Depends(get_verify_token)):
     """Get status of all scheduled tasks"""
     tasks = []
 
@@ -271,7 +273,7 @@ async def get_tasks_status():
 
 @router.post("/run/{task_id}")
 @handle_api_errors("Run task manually", logger)
-async def run_task_manually(task_id: str):
+async def run_task_manually(task_id: str, _username: str = Depends(get_verify_token)):
     """Manually trigger a scheduled task"""
     if task_id == "download_monitor":
         if _download_monitor_task:
@@ -396,7 +398,7 @@ async def run_task_manually(task_id: str):
 
 @router.post("/{task_id}/toggle")
 @handle_api_errors("Toggle task enabled state", logger)
-async def toggle_task(task_id: str):
+async def toggle_task(task_id: str, _username: str = Depends(get_verify_token)):
     """Toggle a task's enabled/disabled state.
 
     Updates both the in-memory scheduler state and persists to config file.

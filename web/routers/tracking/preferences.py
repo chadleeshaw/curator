@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
@@ -24,6 +24,7 @@ from models.database import PeriodicalTracking
 from web.schemas import TrackingPreferencesRequest
 from web.utils.responses import success_response
 from . import _shared
+from web.routers.auth import get_verify_token
 from .merge import _reorganize_periodical_files
 
 # Access global state via _shared module to get current values
@@ -37,6 +38,7 @@ import shutil
 @handle_api_errors("Save tracking preferences", logger)
 async def save_tracking_preferences(
     request: TrackingPreferencesRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """Save magazine tracking preferences"""
 
@@ -102,7 +104,7 @@ async def save_tracking_preferences(
 
 @router.post("/periodicals/tracking/{tracking_id}/reorganize")
 @handle_api_errors("Reorganize tracking files", logger)
-async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
+async def reorganize_tracking_files(tracking_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Reorganize all files for a specific tracking record to match its organization pattern.
 
@@ -230,7 +232,9 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
 @router.put("/periodicals/tracking/{tracking_id}")
 @handle_api_errors("Update tracking", logger)
-async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
+async def update_tracking(
+    tracking_id: int, updates: dict, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Update magazine tracking record"""
 
     def operation(db):

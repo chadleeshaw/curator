@@ -4,6 +4,8 @@ Reading progress tracking for periodicals
 
 from typing import Any, Dict, Optional
 
+from fastapi import Depends
+
 from pydantic import BaseModel
 
 from core.parsers import utc_now
@@ -13,6 +15,7 @@ from models.database import ReadingProgress
 from web.utils.responses import status_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
@@ -28,7 +31,7 @@ class ProgressUpdate(BaseModel):
 
 @router.get("/periodicals/{magazine_id}/progress")
 @handle_api_errors("Get progress", logger)
-async def get_progress(magazine_id: int) -> Dict[str, Any]:
+async def get_progress(magazine_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get reading progress for a periodical.
 
@@ -50,7 +53,9 @@ async def get_progress(magazine_id: int) -> Dict[str, Any]:
 
 @router.post("/periodicals/{magazine_id}/progress")
 @handle_api_errors("Update progress", logger)
-async def update_progress(magazine_id: int, update: ProgressUpdate) -> Dict[str, Any]:
+async def update_progress(
+    magazine_id: int, update: ProgressUpdate, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """
     Update reading progress for a periodical.
 
@@ -96,7 +101,7 @@ async def update_progress(magazine_id: int, update: ProgressUpdate) -> Dict[str,
 
 @router.delete("/periodicals/{magazine_id}/progress")
 @handle_api_errors("Delete progress", logger)
-async def delete_progress(magazine_id: int) -> Dict[str, str]:
+async def delete_progress(magazine_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, str]:
     """
     Delete reading progress for a periodical.
     """

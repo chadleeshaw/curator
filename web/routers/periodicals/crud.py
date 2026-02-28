@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import cast, case, func, literal, String
 from sqlalchemy.orm import Session
 
+from fastapi import Depends
+
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import generate_olid
@@ -25,6 +27,7 @@ from web.schemas import PeriodicalResponse
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
@@ -371,7 +374,11 @@ class PeriodicalQueryBuilder:
 @router.get("/periodicals")
 @handle_api_errors("List periodicals", logger)
 async def list_periodicals(
-    skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc"
+    skip: int = 0,
+    limit: int = 50,
+    sort_by: str = "title",
+    sort_order: str = "asc",
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     List unique periodicals from library (grouped by title).
@@ -413,7 +420,7 @@ async def list_periodicals(
 
 @router.get("/periodicals/languages")
 @handle_api_errors("Get languages", logger)
-async def get_languages() -> Dict[str, Any]:
+async def get_languages(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get unique languages from library with periodical counts.
 
@@ -445,7 +452,7 @@ async def get_languages() -> Dict[str, Any]:
 
 @router.get("/periodicals/{magazine_id}")
 @handle_api_errors("Get periodical", logger)
-async def get_periodical(magazine_id: int) -> PeriodicalResponse:
+async def get_periodical(magazine_id: int, _username: str = Depends(get_verify_token)) -> PeriodicalResponse:
     """Get periodical details"""
 
     def operation(db):
@@ -612,6 +619,7 @@ async def delete_periodical(
     remove_tracking: bool = False,
     delete_all_issues: bool = False,
     mark_as_bad: bool = False,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """Delete a periodical from the library"""
 
@@ -657,7 +665,7 @@ async def delete_periodical(
 
 @router.post("/purge-database")
 @handle_api_errors("Purge database", logger)
-async def purge_database() -> Dict[str, Any]:
+async def purge_database(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Purge all library entries and tracking records from the database.
     Files on disk will NOT be deleted.
@@ -725,7 +733,7 @@ async def purge_database() -> Dict[str, Any]:
 
 @router.post("/purge-cache")
 @handle_api_errors("Purge cache", logger)
-async def purge_cache() -> Dict[str, Any]:
+async def purge_cache(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Purge all cached search results from the database.
     This will force fresh searches from providers on next query.
@@ -758,7 +766,7 @@ async def purge_cache() -> Dict[str, Any]:
 
 @router.get("/cache/stats")
 @handle_api_errors("Get cache stats", logger)
-async def get_cache_stats() -> Dict[str, Any]:
+async def get_cache_stats(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get statistics about the search result cache.
 
@@ -803,7 +811,7 @@ async def get_cache_stats() -> Dict[str, Any]:
 
 @router.get("/periodicals/stats/count")
 @handle_api_errors("Get periodicals count", logger)
-async def get_periodicals_count() -> Dict[str, int]:
+async def get_periodicals_count(_username: str = Depends(get_verify_token)) -> Dict[str, int]:
     """
     Get total count of periodicals in the library.
 

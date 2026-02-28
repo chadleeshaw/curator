@@ -4,7 +4,7 @@ Tracking routes - Download tracking
 
 from typing import Any, Dict
 
-from fastapi import HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 
 from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
@@ -15,6 +15,7 @@ from web.schemas import APIError
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 # Access global state via _shared module to get current values
 router = _shared.router
@@ -44,7 +45,9 @@ logger = _shared.logger
     },
 )
 @handle_api_errors("Track single issue", logger)
-async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Query(True)) -> Dict[str, Any]:
+async def track_single_issue(
+    tracking_id: int, edition_id: str, track: bool = Query(True), _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Track or untrack a single issue/edition"""
 
     def operation(db):

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
@@ -16,6 +16,7 @@ from core.utils.error_handling import handle_api_errors
 from core.utils.general import find_supported_files
 from web.schemas import ImportOptionsRequest
 from web.utils.responses import status_response, success_response
+from web.routers.auth import get_verify_token
 
 router = APIRouter(prefix="/api/import", tags=["imports"])
 logger = logging.getLogger(__name__)
@@ -37,7 +38,9 @@ def set_dependencies(session_factory: Callable, file_importer: Any, storage_conf
 @router.post("/process")
 @handle_api_errors("Import from downloads", logger)
 async def import_from_downloads(
-    background_tasks: BackgroundTasks, options: Optional[ImportOptionsRequest] = None
+    background_tasks: BackgroundTasks,
+    options: Optional[ImportOptionsRequest] = None,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Process PDF, EPUB, CBZ, and CBR files from downloads folder and import them into the library.
@@ -74,7 +77,7 @@ async def import_from_downloads(
 
 @router.get("/status")
 @handle_api_errors("Get import status", logger)
-async def get_import_status() -> Dict[str, Any]:
+async def get_import_status(_username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Get information about available files in downloads folder (searches recursively)"""
     downloads_dir = Path(_storage_config.get("download_dir", "./downloads"))
 
@@ -106,6 +109,7 @@ async def get_import_status() -> Dict[str, Any]:
 async def import_from_library_dir(
     background_tasks: BackgroundTasks,
     options: ImportOptionsRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Import PDF, EPUB, CBZ, and CBR files from the organized data directory back into the library.
@@ -186,6 +190,7 @@ async def reorganize_library(
     category: str = DEFAULT_CATEGORY,
     pattern: Optional[str] = None,
     dry_run: Optional[bool] = None,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Reorganize files in the library to match the current organization pattern.

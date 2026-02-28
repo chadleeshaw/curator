@@ -4,7 +4,7 @@ Tracking routes - Search functionality
 
 from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
@@ -14,6 +14,7 @@ from models.database import SearchResult as DBSearchResult
 from web.utils.responses import success_response, error_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 # Access global state via _shared module to get current values
 router = _shared.router
@@ -22,7 +23,9 @@ logger = _shared.logger
 
 @router.get("/periodicals/tracked/{tracking_id}/search-issues")
 @handle_api_errors("Search tracked periodical issues", logger)
-async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
+async def search_tracked_periodical_issues(
+    tracking_id: int, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Search for all issues of a tracked periodical"""
 
     def operation(db):

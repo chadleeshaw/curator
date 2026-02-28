@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
@@ -26,6 +26,7 @@ from services.ocr.service import OCRService
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
@@ -54,7 +55,7 @@ class BulkRegenerateRequest(BaseModel):
 
 @router.post("/periodicals/bulk/move-to-tracking")
 @handle_api_errors("Bulk move issues to tracking", logger)
-async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
+async def bulk_move_to_tracking(request: BulkMoveRequest, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Move multiple issues to a different tracking record.
 
@@ -159,6 +160,7 @@ async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
 @handle_api_errors("Bulk regenerate thumbnail & OCR", logger)
 async def bulk_regenerate_thumbnail_ocr(
     request: BulkRegenerateRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Regenerate cover thumbnails and queue OCR for multiple issues.
@@ -291,7 +293,7 @@ async def bulk_regenerate_thumbnail_ocr(
 
 @router.post("/periodicals/bulk/delete")
 @handle_api_errors("Bulk delete issues", logger)
-async def bulk_delete(request: BulkDeleteRequest) -> Dict[str, Any]:
+async def bulk_delete(request: BulkDeleteRequest, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Delete multiple issues at once.
 

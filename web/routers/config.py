@@ -7,13 +7,14 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
 from core.constants.app import RESTART_SHUTDOWN_DELAY
 from core.utils.error_handling import handle_api_errors
 from web.utils.responses import error_response, status_response, success_response
+from web.routers.auth import get_auth_middleware, get_verify_token
 
 router = APIRouter(prefix="/api/config", tags=["configuration"])
 logger = logging.getLogger(__name__)
@@ -202,7 +203,7 @@ def _resolve_masked_client_key(client_config: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("")
 @handle_api_errors("Get config", logger)
-async def get_config():
+async def get_config(_username: str = Depends(get_verify_token)):
     """Get current configuration"""
     # Reload from file to ensure we have the latest (including manual edits)
     _config_loader.reload_config()
@@ -216,7 +217,9 @@ async def get_config():
 
 @router.post("")
 @handle_api_errors("Update config", logger)
-async def update_config(config_update: Dict[str, Any], background_tasks: BackgroundTasks):
+async def update_config(
+    config_update: Dict[str, Any], background_tasks: BackgroundTasks, _username: str = Depends(get_verify_token)
+):
     """Update configuration and restart application"""
     # Reload from file to ensure we have the latest (including manual edits)
     _config_loader.reload_config()
@@ -249,7 +252,7 @@ async def update_config(config_update: Dict[str, Any], background_tasks: Backgro
 
 @router.post("/save")
 @handle_api_errors("Save config", logger)
-async def save_config_only(config_update: Dict[str, Any]):
+async def save_config_only(config_update: Dict[str, Any], _username: str = Depends(get_verify_token)):
     """Save configuration without restarting"""
     # Reload from file to ensure we have the latest (including manual edits)
     _config_loader.reload_config()
@@ -288,7 +291,7 @@ async def save_config_only(config_update: Dict[str, Any]):
 
 @router.post("/reload")
 @handle_api_errors("Reload config", logger)
-async def reload_config():
+async def reload_config(_username: str = Depends(get_verify_token)):
     """Reload configuration and reinitialize providers"""
     # Note: This would typically call a reinitialization function
     # But that logic needs to stay in main app due to global state dependencies
@@ -300,7 +303,7 @@ async def reload_config():
 
 @router.post("/restart")
 @handle_api_errors("Restart application", logger)
-async def restart_application(background_tasks: BackgroundTasks):
+async def restart_application(background_tasks: BackgroundTasks, _username: str = Depends(get_verify_token)):
     """Restart the application"""
     logger.info("Restart request received - restarting application")
 
@@ -315,7 +318,7 @@ async def restart_application(background_tasks: BackgroundTasks):
 
 @router.post("/test-provider")
 @handle_api_errors("Test provider connection", logger)
-async def test_provider_connection(provider_config: Dict[str, Any]):
+async def test_provider_connection(provider_config: Dict[str, Any], _username: str = Depends(get_verify_token)):
     """
     Test connection to a search provider.
 
@@ -361,12 +364,12 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
         return error_response(str(e))
     except Exception as e:
         logger.error(f"Test provider connection error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred")
 
 
 @router.post("/test-download-client")
 @handle_api_errors("Test download client connection", logger)
-async def test_download_client_connection(client_config: Dict[str, Any]):
+async def test_download_client_connection(client_config: Dict[str, Any], _username: str = Depends(get_verify_token)):
     """
     Test connection to a download client.
 
@@ -415,4 +418,4 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
         return error_response(str(e))
     except Exception as e:
         logger.error(f"Test download client connection error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred")

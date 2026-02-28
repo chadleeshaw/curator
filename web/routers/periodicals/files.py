@@ -6,7 +6,7 @@ import mimetypes
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from core.utils import run_in_thread
@@ -30,6 +30,7 @@ from core.utils.readers import (
 from services.file_operations import reorganize_periodical_files
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
@@ -37,7 +38,7 @@ logger = _shared.logger
 
 @router.get("/periodicals/{periodical_id}/pdf")
 @handle_api_errors("Get file", logger)
-async def get_pdf(periodical_id: int):
+async def get_pdf(periodical_id: int, _username: str = Depends(get_verify_token)):
     """
     Get magazine file (PDF, EPUB, CBZ, or CBR).
 
@@ -73,7 +74,7 @@ async def get_pdf(periodical_id: int):
 
 @router.get("/periodicals/{periodical_id}/epub/metadata")
 @handle_api_errors("Get EPUB metadata", logger)
-async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
+async def get_epub_metadata_endpoint(periodical_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get EPUB metadata and chapter list.
 
@@ -102,7 +103,9 @@ async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
 
 @router.get("/periodicals/{periodical_id}/epub/chapter/{chapter_index}")
 @handle_api_errors("Get EPUB chapter", logger)
-async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> HTMLResponse:
+async def get_epub_chapter_endpoint(
+    periodical_id: int, chapter_index: int, _username: str = Depends(get_verify_token)
+) -> HTMLResponse:
     """
     Get specific EPUB chapter content as HTML.
 
@@ -138,7 +141,7 @@ async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> H
 
 @router.get("/periodicals/{periodical_id}/epub/image/{image_name}")
 @handle_api_errors("Get EPUB image", logger)
-async def get_epub_image_endpoint(periodical_id: int, image_name: str):
+async def get_epub_image_endpoint(periodical_id: int, image_name: str, _username: str = Depends(get_verify_token)):
     """
     Get an image from an EPUB file.
 
@@ -182,7 +185,7 @@ async def get_epub_image_endpoint(periodical_id: int, image_name: str):
 
 @router.get("/periodicals/{periodical_id}/comic/metadata")
 @handle_api_errors("Get comic metadata", logger)
-async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
+async def get_comic_metadata_endpoint(periodical_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get comic metadata and page list.
 
@@ -216,7 +219,7 @@ async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
 
 @router.get("/periodicals/{periodical_id}/comic/page/{page_index}")
 @handle_api_errors("Get comic page", logger)
-async def get_comic_page_endpoint(periodical_id: int, page_index: int):
+async def get_comic_page_endpoint(periodical_id: int, page_index: int, _username: str = Depends(get_verify_token)):
     """
     Get specific comic page as image.
 
@@ -263,7 +266,9 @@ async def get_comic_page_endpoint(periodical_id: int, page_index: int):
 
 @router.get("/periodicals/{periodical_id}/comic/page/{page_index}/thumbnail")
 @handle_api_errors("Get comic page thumbnail", logger)
-async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int):
+async def get_comic_page_thumbnail_endpoint(
+    periodical_id: int, page_index: int, _username: str = Depends(get_verify_token)
+):
     """
     Get thumbnail of a specific comic page.
 
@@ -299,7 +304,7 @@ async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int)
 
 @router.get("/periodicals/{periodical_id}/pdf/metadata")
 @handle_api_errors("Get PDF metadata", logger)
-async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
+async def get_pdf_metadata_endpoint(periodical_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get PDF metadata including page count and cover page index.
 
@@ -333,7 +338,7 @@ async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
 
 @router.get("/periodicals/{periodical_id}/pdf/page/{page_index}")
 @handle_api_errors("Get PDF page", logger)
-async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
+async def get_pdf_page_endpoint(periodical_id: int, page_index: int, _username: str = Depends(get_verify_token)):
     """
     Get a specific page from a PDF as an image.
 
@@ -369,7 +374,9 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
 
 @router.get("/periodicals/{periodical_id}/pdf/page/{page_index}/thumbnail")
 @handle_api_errors("Get PDF page thumbnail", logger)
-async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
+async def get_pdf_page_thumbnail_endpoint(
+    periodical_id: int, page_index: int, _username: str = Depends(get_verify_token)
+):
     """
     Get a thumbnail of a specific page from a PDF.
 
@@ -405,7 +412,9 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
 
 @router.post("/periodicals/{periodical_id}/move-to-tracking")
 @handle_api_errors("Move issue to tracking", logger)
-async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) -> Dict[str, Any]:
+async def move_issue_to_tracking(
+    periodical_id: int, target_tracking_id: int, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """
     Move a single issue to a different tracking record.
     Useful for correcting misplaced issues.

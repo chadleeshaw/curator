@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from core.constants.errors import ErrorMessages
 from core.utils.db import check_file_path_conflict, with_db_session
@@ -20,6 +20,7 @@ from web.schemas import APIError
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 # Access global state via _shared module to get current values
 router = _shared.router
@@ -110,7 +111,9 @@ def _reorganize_periodical_files(
     },
 )
 @handle_api_errors("Merge tracking records", logger)
-async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Dict[str, Any]:
+async def merge_tracking(
+    target_id: int, source_ids: Dict[str, list[int]], _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """
     Merge multiple tracking records into a single target record.
 

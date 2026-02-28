@@ -5,7 +5,7 @@ Download submission endpoints
 from datetime import datetime
 from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 
 from core.constants.errors import ErrorMessages
 from core.utils.error_handling import handle_api_errors
@@ -21,6 +21,7 @@ from core.utils.db import with_db_session
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 
 @_shared.router.post(
@@ -51,6 +52,7 @@ from . import _shared
 @handle_api_errors("Download all periodical issues", _shared.logger)
 async def download_all_periodical_issues(
     request: DownloadAllIssuesRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """Search for and download all available issues of a tracked periodical"""
     if not _shared._download_manager:
@@ -87,6 +89,7 @@ async def download_all_periodical_issues(
 @handle_api_errors("Download single issue", _shared.logger)
 async def download_single_issue(
     request: DownloadSingleIssueRequest,
+    _username: str = Depends(get_verify_token),
 ) -> DownloadSubmissionResponse:
     """Download a single issue"""
     if not _shared._download_manager:
@@ -198,6 +201,7 @@ async def download_single_issue(
 @handle_api_errors("Batch download issues", _shared.logger)
 async def download_batch_issues(
     request: DownloadBatchIssuesRequest,
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """Download multiple issues in a single batch request"""
     if not _shared._download_manager:

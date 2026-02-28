@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict
 
+from fastapi import Depends
 
 from core.constants.date import NUMBER_TO_MONTH
 from core.utils.db import mark_json_modified, with_db_session
@@ -15,6 +16,7 @@ from services.file_operations import reorganize_periodical_files
 from web.utils.responses import success_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
@@ -22,7 +24,9 @@ logger = _shared.logger
 
 @router.post("/periodicals/{magazine_id}/toggle-special-edition")
 @handle_api_errors("Toggle special edition", logger)
-async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str, Any]:
+async def toggle_special_edition(
+    magazine_id: int, is_special: bool, _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """
     Mark or unmark an issue as a special edition.
 
@@ -74,7 +78,9 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
 
 @router.put("/periodicals/{magazine_id}")
 @handle_api_errors("Update periodical", logger)
-async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+async def update_periodical(
+    magazine_id: int, updates: Dict[str, Any], _username: str = Depends(get_verify_token)
+) -> Dict[str, Any]:
     """Update periodical metadata"""
 
     def operation(db):

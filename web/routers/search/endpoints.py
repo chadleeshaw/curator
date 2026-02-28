@@ -5,9 +5,10 @@ Contains all FastAPI route handlers for search functionality.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
@@ -15,6 +16,7 @@ from core.utils.error_handling import handle_api_errors
 from models.database import Periodical
 from web.schemas import APIError, SearchRequest
 from web.utils.responses import success_response
+from web.routers.auth import get_auth_middleware, get_verify_token
 
 from .cache import (
     get_cached_search_results,
@@ -76,13 +78,17 @@ logger = logging.getLogger(__name__)
     },
 )
 @handle_api_errors("Search", logger)
-async def search(request: SearchRequest) -> Dict[str, Any]:
+async def search(request: SearchRequest, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Search for magazines.
 
     - Automatic mode: aggregate all providers, deduplicate by title similarity
     - Manual mode: search specific providers, return all results grouped
     """
+    if len(request.query) > 200:
+        raise HTTPException(status_code=400, detail="Search query too long (max 200 characters)")
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
     all_results = []
     search_providers = get_search_providers()
     title_matcher = get_title_matcher()
@@ -166,6 +172,7 @@ async def search_periodical_providers(
     tracking_id: int = Query(None, description="Scope library status to specific tracking ID"),
     force_refresh: bool = Query(False, description="Bypass cache and fetch fresh results"),
     cache_ttl_days: int = Query(7, description="Cache validity in days"),
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """
     Search for periodical issues with intelligent caching and library deduplication.
@@ -180,6 +187,9 @@ async def search_periodical_providers(
     7. Return unified result list with status indicators
     """
     session_factory = get_session_factory()
+
+    if len(query) > 200:
+        raise HTTPException(status_code=400, detail="Search query too long (max 200 characters)")
 
     def operation(db):
         if not query or len(query.strip()) < 2:
@@ -303,7 +313,7 @@ async def search_periodical_providers(
     },
 )
 @handle_api_errors("Get periodical issues", logger)
-async def get_periodical_issues(magazine_title: str) -> Dict[str, Any]:
+async def get_periodical_issues(magazine_title: str, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """
     Get all available issues of a specific periodical by searching providers.
 
