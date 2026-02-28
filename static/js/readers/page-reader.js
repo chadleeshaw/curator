@@ -287,7 +287,7 @@ export class PageReader {
     const imageUrl = this.getEndpoint(`page/${index}`);
 
     // Fetch with auth header, convert to blob URL
-    const response = await APIClient.fetch(imageUrl);
+    const response = await APIClient.authenticatedFetch(imageUrl);
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
     this._revokePreviousDisplayBlobs();
@@ -316,8 +316,8 @@ export class PageReader {
 
     // Fetch both pages with auth headers in parallel
     const [res1, res2] = await Promise.all([
-      APIClient.fetch(imageUrl1),
-      APIClient.fetch(imageUrl2),
+      APIClient.authenticatedFetch(imageUrl1),
+      APIClient.authenticatedFetch(imageUrl2),
     ]);
     const [blob1, blob2] = await Promise.all([res1.blob(), res2.blob()]);
     const objectUrl1 = URL.createObjectURL(blob1);
@@ -449,7 +449,7 @@ export class PageReader {
         });
     } else {
       // Fetch with auth header, convert to blob URL
-      APIClient.fetch(imageUrl)
+      APIClient.authenticatedFetch(imageUrl)
         .then((response) => response.blob())
         .then((blob) => {
           const objectUrl = URL.createObjectURL(blob);
