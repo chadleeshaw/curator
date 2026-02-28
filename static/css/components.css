@@ -776,6 +776,22 @@
   color: rgb(168, 162, 158);
 }
 
+.stack-name-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(139, 92, 246, 0.15);
+  color: rgb(167, 139, 250);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
 .tracked-card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -2228,6 +2244,19 @@
 
   .summary-stats .clickable-stat {
     padding: 10px 12px;
+  }
+
+  .settings-tabs-nav {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .settings-tab-btn {
+    padding: 10px 4px;
+    gap: 0;
+  }
+
+  .settings-tab-btn .nav-text {
+    display: none;
   }
 }
 

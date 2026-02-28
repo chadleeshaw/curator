@@ -734,7 +734,7 @@ export class TrackingManager {
     const filtered = this.filterManager.applyFilters(this.allTracked, {
       getCategoryFn: (t) => t.category || 'Unknown',
       getLanguageFn: (t) => t.language || 'English',
-      getTitleFn: (t) => t.title || '',
+      getTitleFn: (t) => (t.title || '') + (t.stack_name ? '\0' + t.stack_name : ''),
     });
 
     // Update statistics with filtered results
@@ -758,12 +758,16 @@ export class TrackingManager {
       return;
     }
 
+    // When filters are active, render individual cards (not grouped into stacks)
+    // so users can see exactly which items matched their search/filter.
+    const isFiltering = this.filterManager.hasActiveFilters();
+
     // Group items by stack while tracking first-seen position for sort interleaving
     const stackGroups = new Map(); // stack_id -> { name, slug, items: [], firstIndex }
     const ungrouped = []; // { trackingItem, index }
 
     filtered.forEach((trackingItem, index) => {
-      if (trackingItem.stack_id && trackingItem.stack_name) {
+      if (!isFiltering && trackingItem.stack_id && trackingItem.stack_name) {
         if (!stackGroups.has(trackingItem.stack_id)) {
           stackGroups.set(trackingItem.stack_id, {
             name: trackingItem.stack_name,
@@ -780,17 +784,20 @@ export class TrackingManager {
       }
     });
 
-    // Inject empty stacks that have no members in the filtered tracking list
-    for (const stack of this.allStacks) {
-      if (!stackGroups.has(stack.id)) {
-        stackGroups.set(stack.id, {
-          name: stack.name,
-          slug: stack.slug,
-          description: stack.description || '',
-          categories: stack.categories || [],
-          items: [],
-          firstIndex: -1,
-        });
+    // Inject empty stacks that have no members in the filtered tracking list,
+    // but only when no filters are active (searching/filtering hides empty stacks)
+    if (!this.filterManager.hasActiveFilters()) {
+      for (const stack of this.allStacks) {
+        if (!stackGroups.has(stack.id)) {
+          stackGroups.set(stack.id, {
+            name: stack.name,
+            slug: stack.slug,
+            description: stack.description || '',
+            categories: stack.categories || [],
+            items: [],
+            firstIndex: -1,
+          });
+        }
       }
     }
 
@@ -928,7 +935,9 @@ export class TrackingManager {
 
         container.appendChild(groupEl);
       } else {
-        container.appendChild(this.createTrackedCard(entry.trackingItem));
+        const stackName =
+          isFiltering && entry.trackingItem.stack_name ? entry.trackingItem.stack_name : null;
+        container.appendChild(this.createTrackedCard(entry.trackingItem, stackName));
       }
     });
 
@@ -1025,9 +1034,10 @@ export class TrackingManager {
    * @param {string} [tracked.country] - Country code
    * @param {string} [tracked.category] - Category
    * @param {string} [tracked.language] - Language
+   * @param {string|null} [stackName=null] - Stack name to display as a badge (shown when filtering)
    * @returns {HTMLElement} The created card element
    */
-  createTrackedCard(tracked) {
+  createTrackedCard(tracked, stackName = null) {
     const {
       id,
       title,
@@ -1075,11 +1085,16 @@ export class TrackingManager {
       ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${id}" ${this.selectedForMerge.has(id) ? 'checked' : ''}>`
       : '';
 
+    const stackNameBadge = stackName
+      ? `<span class="stack-name-badge" title="In stack: ${escapeHtml(stackName)}"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> ${escapeHtml(stackName)}</span>`
+      : '';
+
     card.innerHTML = `
       ${checkboxHtml}
       <div class="tracked-card-main">
         <div class="tracked-card-header">
           <h5>${escapeHtml(title)}</h5>
+          ${stackNameBadge}
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">

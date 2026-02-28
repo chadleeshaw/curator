@@ -237,6 +237,15 @@ body {
   transition: all 0.2s;
 }
 
+/* By default, show text labels and hide icons */
+.fit-btn .btn-icon {
+  display: none;
+}
+
+.fit-btn .btn-text {
+  display: inline;
+}
+
 .fit-btn:hover,
 .control-btn:hover {
   background: var(--surface);
@@ -579,28 +588,18 @@ body {
     justify-content: center;
   }
 
-  /* Hide button text on mobile for fit mode buttons only, convert to icon-only */
-  .fit-controls .fit-btn[data-mode='fit-width']::before {
-    content: '↔️';
+  /* Hide button text on mobile for fit mode buttons only, show icon instead */
+  .fit-controls .fit-btn .btn-text {
+    display: none;
   }
 
-  .fit-controls .fit-btn[data-mode='fit-height']::before {
-    content: '↕️';
+  .fit-controls .fit-btn .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .fit-controls .fit-btn[data-mode='original']::before {
-    content: '🔍';
-  }
-
-  .fit-controls .fit-btn {
-    font-size: 0;
-  }
-
-  .fit-controls .fit-btn::before {
-    font-size: 16px;
-  }
-
-  /* View controls buttons (spread/fullscreen) keep their emoji content */
+  /* View controls buttons (spread/fullscreen) keep their SVG content */
   .view-controls .fit-btn {
     font-size: 1.2em;
   }
