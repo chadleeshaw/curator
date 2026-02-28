@@ -3,10 +3,11 @@ Tracking routes - CRUD operations
 """
 
 from datetime import UTC, datetime
+from sqlalchemy import func
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 
 from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
@@ -28,6 +29,7 @@ from web.schemas import APIError
 from web.utils.responses import success_response, error_response
 
 from . import _shared
+from web.routers.auth import get_verify_token
 
 # Access global state via _shared module to get current values
 router = _shared.router
@@ -61,6 +63,7 @@ async def start_tracking_periodical(
     category: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
     language: Optional[str] = Query("English"),
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """Start tracking a periodical"""
     if not title or len(title.strip()) < 2:
@@ -111,7 +114,11 @@ async def start_tracking_periodical(
 @router.get("/periodicals/tracking")
 @handle_api_errors("List tracked periodicals", logger)
 async def list_tracked_periodicals(
-    skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc"
+    skip: int = 0,
+    limit: int = 50,
+    sort_by: str = "title",
+    sort_order: str = "asc",
+    _username: str = Depends(get_verify_token),
 ) -> Dict[str, Any]:
     """List all currently tracked periodicals"""
 
@@ -166,34 +173,54 @@ async def list_tracked_periodicals(
         tracked = query.offset(skip).limit(limit).all()
         total = db.query(PeriodicalTracking).count()
 
+        # Batch-fetch all counts and stack data to avoid N+1 queries
+        tracking_ids = [t.id for t in tracked]
+
+        library_counts = {
+            row[0]: row[1]
+            for row in db.query(Periodical.tracking_id, func.count(Periodical.id))  # pylint: disable=not-callable
+            .filter(Periodical.tracking_id.in_(tracking_ids))
+            .group_by(Periodical.tracking_id)
+            .all()
+        }
+
+        discovered_failed_counts = {
+            row[0]: row[1]
+            for row in db.query(
+                DiscoveredIssue.tracking_id, func.count(DiscoveredIssue.id)  # pylint: disable=not-callable
+            )  # noqa
+            .filter(
+                DiscoveredIssue.tracking_id.in_(tracking_ids),
+                DiscoveredIssue.download_status.in_([DownloadStatus.FAILED, DownloadStatus.PERMANENTLY_FAILED]),
+            )
+            .group_by(DiscoveredIssue.tracking_id)
+            .all()
+        }
+
+        legacy_failed_counts = {
+            row[0]: row[1]
+            for row in db.query(
+                DownloadSubmission.tracking_id, func.count(DownloadSubmission.id)  # pylint: disable=not-callable
+            )  # noqa
+            .filter(
+                DownloadSubmission.tracking_id.in_(tracking_ids),
+                DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+            )
+            .group_by(DownloadSubmission.tracking_id)
+            .all()
+        }
+
+        # Batch-fetch stack memberships and their stacks
+        memberships = db.query(StackMembership).filter(StackMembership.periodical_tracking_id.in_(tracking_ids)).all()
+        stack_ids = [m.stack_id for m in memberships if m.stack_id is not None]
+        stacks_by_id = {s.id: s for s in db.query(Stack).filter(Stack.id.in_(stack_ids)).all()} if stack_ids else {}
+        stack_membership_by_tracking = {m.periodical_tracking_id: m for m in memberships}
+
         # Compute library count and failed download count for each tracked periodical
         tracked_list = []
         for t in tracked:
-            library_count = db.query(Periodical).filter(Periodical.tracking_id == t.id).count()
-
-            # Count failed downloads from both sources for backward compatibility:
-            # 1. New Issue Discovery system (canonical going forward)
-            # 2. Legacy DownloadSubmission system (for historical failures)
-            discovered_failed = (
-                db.query(DiscoveredIssue)
-                .filter(
-                    DiscoveredIssue.tracking_id == t.id,
-                    DiscoveredIssue.download_status.in_([DownloadStatus.FAILED, DownloadStatus.PERMANENTLY_FAILED]),
-                )
-                .count()
-            )
-
-            legacy_failed = (
-                db.query(DownloadSubmission)
-                .filter(
-                    DownloadSubmission.tracking_id == t.id,
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                )
-                .count()
-            )
-
-            # Show total of both systems (UI will query both)
-            failed_count = discovered_failed + legacy_failed
+            library_count = library_counts.get(t.id, 0)
+            failed_count = discovered_failed_counts.get(t.id, 0) + legacy_failed_counts.get(t.id, 0)
 
             # Look up stack membership for this tracking item
             stack_info = {
@@ -203,9 +230,9 @@ async def list_tracked_periodicals(
                 "stack_description": None,
                 "stack_categories": [],
             }
-            stack_membership = db.query(StackMembership).filter(StackMembership.periodical_tracking_id == t.id).first()
+            stack_membership = stack_membership_by_tracking.get(t.id)
             if stack_membership:
-                stack = db.query(Stack).filter(Stack.id == stack_membership.stack_id).first()
+                stack = stacks_by_id.get(stack_membership.stack_id)
                 if stack:
                     stack_info = {
                         "stack_id": stack.id,
@@ -258,7 +285,7 @@ async def list_tracked_periodicals(
 
 @router.get("/periodicals/tracking/{tracking_id}")
 @handle_api_errors("Get tracking details", logger)
-async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
+async def get_tracking_details(tracking_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Get detailed tracking information for a specific magazine"""
 
     def operation(db):
@@ -340,7 +367,7 @@ def _reorganize_periodical_files(
     },
 )
 @handle_api_errors("Delete tracking", logger)
-async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
+async def delete_tracking(tracking_id: int, _username: str = Depends(get_verify_token)) -> Dict[str, Any]:
     """Delete a magazine tracking record"""
 
     def operation(db):
