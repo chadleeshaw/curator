@@ -4,7 +4,7 @@
  * Handles loading and displaying content page by page with spread mode support
  */
 
-/* global URL, Image */
+/* global URL, Image, IntersectionObserver */
 
 import { APIClient, APIHelper } from '../core/api.js';
 import { mediaWorker, Priority } from './media-worker-manager.js';
@@ -71,6 +71,7 @@ export class PageReader {
     this.prefetchCache = new Map(); // Cache for prefetched images
     this.workerInitialized = false; // Media worker status
     this._displayBlobUrls = []; // Blob URLs for currently displayed pages (for cleanup)
+    this._thumbnailObserver = null; // IntersectionObserver for lazy thumbnail loading
 
     // Initialize managers
     this.fullscreenManager = new FullscreenManager({
@@ -207,7 +208,6 @@ export class PageReader {
       return;
     }
 
-    // Use a data attribute to store the reader reference name for onclick
     const readerName = this.contentType === 'comic' ? 'comicReader' : 'pdfReader';
 
     pageList.innerHTML = this.metadata.pages
@@ -219,16 +219,52 @@ export class PageReader {
           onclick="${readerName}.loadPage(${index})"
         >
           <img
-            src="${this.getEndpoint(`page/${index}/thumbnail`)}"
+            data-src="${this.getEndpoint(`page/${index}/thumbnail`)}"
             alt="Page ${index + 1}"
             class="page-thumbnail"
-            loading="lazy"
           />
           <span class="page-number">Page ${index + 1}</span>
         </div>
       `
       )
       .join('');
+
+    this._setupThumbnailObserver(pageList);
+  }
+
+  /**
+   * Set up IntersectionObserver to lazy-load sidebar thumbnails with auth.
+   * @param {HTMLElement} pageList - The sidebar page list container
+   */
+  _setupThumbnailObserver(pageList) {
+    if (this._thumbnailObserver) {
+      this._thumbnailObserver.disconnect();
+    }
+
+    this._thumbnailObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const img = entry.target;
+          const src = img.dataset.src;
+          if (!src || img.src.startsWith('blob:')) return;
+          this._thumbnailObserver.unobserve(img);
+          APIClient.authenticatedFetch(src)
+            .then((response) => response.blob())
+            .then((blob) => {
+              img.src = URL.createObjectURL(blob);
+            })
+            .catch(() => {
+              // leave placeholder on error
+            });
+        });
+      },
+      { root: pageList, rootMargin: '200px' }
+    );
+
+    pageList.querySelectorAll('img[data-src]').forEach((img) => {
+      this._thumbnailObserver.observe(img);
+    });
   }
 
   /**
@@ -767,6 +803,11 @@ export class PageReader {
       }
     }
     this.prefetchCache.clear();
+    this._revokePreviousDisplayBlobs();
+    if (this._thumbnailObserver) {
+      this._thumbnailObserver.disconnect();
+      this._thumbnailObserver = null;
+    }
     this._revokePreviousDisplayBlobs();
   }
 
