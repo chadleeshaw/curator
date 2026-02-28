@@ -70,6 +70,7 @@ export class PageReader {
     this.coverPageIndex = 0; // Index of the cover page (default 0)
     this.prefetchCache = new Map(); // Cache for prefetched images
     this.workerInitialized = false; // Media worker status
+    this._displayBlobUrls = []; // Blob URLs for currently displayed pages (for cleanup)
 
     // Initialize managers
     this.fullscreenManager = new FullscreenManager({
@@ -284,31 +285,24 @@ export class PageReader {
   async loadSinglePage(index) {
     const contentDiv = document.getElementById('page-content');
     const imageUrl = this.getEndpoint(`page/${index}`);
-    const img = new Image();
 
-    return new Promise((resolve, reject) => {
-      img.onload = () => {
-        contentDiv.innerHTML = `
-          <div class="page-image-container ${this.fitMode}">
-            <img src="${imageUrl}" alt="Page ${index + 1}" class="page-image" id="page-image" />
-          </div>
-        `;
+    // Fetch with auth header, convert to blob URL
+    const response = await APIClient.fetch(imageUrl);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    this._revokePreviousDisplayBlobs();
+    this._displayBlobUrls = [objectUrl];
 
-        this.applyZoom(this.zoomLevel);
-        contentDiv.scrollTop = 0;
-        this.updateURL(index);
-        this.loading = false;
-        resolve();
-      };
+    contentDiv.innerHTML = `
+      <div class="page-image-container ${this.fitMode}">
+        <img src="${objectUrl}" alt="Page ${index + 1}" class="page-image" id="page-image" />
+      </div>
+    `;
 
-      img.onerror = () => {
-        contentDiv.innerHTML = `<div class="error">Failed to load page image</div>`;
-        this.loading = false;
-        reject(new Error('Failed to load image'));
-      };
-
-      img.src = imageUrl;
-    });
+    this.applyZoom(this.zoomLevel);
+    contentDiv.scrollTop = 0;
+    this.updateURL(index);
+    this.loading = false;
   }
 
   /**
@@ -320,41 +314,28 @@ export class PageReader {
     const imageUrl1 = this.getEndpoint(`page/${index}`);
     const imageUrl2 = this.getEndpoint(`page/${index + 1}`);
 
-    const img1 = new Image();
-    const img2 = new Image();
+    // Fetch both pages with auth headers in parallel
+    const [res1, res2] = await Promise.all([
+      APIClient.fetch(imageUrl1),
+      APIClient.fetch(imageUrl2),
+    ]);
+    const [blob1, blob2] = await Promise.all([res1.blob(), res2.blob()]);
+    const objectUrl1 = URL.createObjectURL(blob1);
+    const objectUrl2 = URL.createObjectURL(blob2);
+    this._revokePreviousDisplayBlobs();
+    this._displayBlobUrls = [objectUrl1, objectUrl2];
 
-    return new Promise((resolve, reject) => {
-      let loaded = 0;
-      const checkBothLoaded = () => {
-        loaded++;
-        if (loaded === 2) {
-          contentDiv.innerHTML = `
-            <div class="page-spread-container ${this.fitMode}">
-              <img src="${imageUrl1}" alt="Page ${index + 1}" class="spread-image" />
-              <img src="${imageUrl2}" alt="Page ${index + 2}" class="spread-image" />
-            </div>
-          `;
+    contentDiv.innerHTML = `
+      <div class="page-spread-container ${this.fitMode}">
+        <img src="${objectUrl1}" alt="Page ${index + 1}" class="spread-image" />
+        <img src="${objectUrl2}" alt="Page ${index + 2}" class="spread-image" />
+      </div>
+    `;
 
-          this.applyZoom(this.zoomLevel);
-          contentDiv.scrollTop = 0;
-          this.updateURL(index);
-          this.loading = false;
-          resolve();
-        }
-      };
-
-      img1.onload = checkBothLoaded;
-      img2.onload = checkBothLoaded;
-
-      img1.onerror = img2.onerror = () => {
-        contentDiv.innerHTML = `<div class="error">Failed to load page images</div>`;
-        this.loading = false;
-        reject(new Error('Failed to load images'));
-      };
-
-      img1.src = imageUrl1;
-      img2.src = imageUrl2;
-    });
+    this.applyZoom(this.zoomLevel);
+    contentDiv.scrollTop = 0;
+    this.updateURL(index);
+    this.loading = false;
   }
 
   /**
@@ -422,6 +403,20 @@ export class PageReader {
    * Prefetch a single page image
    * @param {number} index - Page index to prefetch
    */
+  /**
+   * Revoke blob URLs for previously displayed pages to avoid memory leaks.
+   */
+  _revokePreviousDisplayBlobs() {
+    for (const url of this._displayBlobUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this._displayBlobUrls = [];
+  }
+
+  /**
+   * Prefetch a single page image
+   * @param {number} index - Page index to prefetch
+   */
   prefetchPage(index) {
     if (this.prefetchCache.has(index)) return;
 
@@ -453,19 +448,29 @@ export class PageReader {
           console.warn(`Failed to prefetch page ${index + 1} via worker:`, err);
         });
     } else {
-      const img = new Image();
-      img.onload = () => {
-        this.prefetchCache.set(index, img);
-        if (this.prefetchCache.size > MAX_PREFETCH_CACHE_SIZE) {
-          const oldestKey = this.prefetchCache.keys().next().value;
-          this.prefetchCache.delete(oldestKey);
-        }
-        console.log(`Prefetched page ${index + 1}`);
-      };
-      img.onerror = () => {
-        console.warn(`Failed to prefetch page ${index + 1}`);
-      };
-      img.src = imageUrl;
+      // Fetch with auth header, convert to blob URL
+      APIClient.fetch(imageUrl)
+        .then((response) => response.blob())
+        .then((blob) => {
+          const objectUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.src = objectUrl;
+          img.onload = () => {
+            this.prefetchCache.set(index, img);
+            if (this.prefetchCache.size > MAX_PREFETCH_CACHE_SIZE) {
+              const oldestKey = this.prefetchCache.keys().next().value;
+              const oldestImg = this.prefetchCache.get(oldestKey);
+              if (oldestImg?.src?.startsWith('blob:')) {
+                URL.revokeObjectURL(oldestImg.src);
+              }
+              this.prefetchCache.delete(oldestKey);
+            }
+            console.log(`Prefetched page ${index + 1}`);
+          };
+        })
+        .catch((err) => {
+          console.warn(`Failed to prefetch page ${index + 1}:`, err);
+        });
     }
   }
 
@@ -762,6 +767,7 @@ export class PageReader {
       }
     }
     this.prefetchCache.clear();
+    this._revokePreviousDisplayBlobs();
   }
 
   /**
