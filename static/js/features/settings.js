@@ -15,6 +15,7 @@ import {
   TIMEOUTS,
 } from '../core/constants.js';
 
+const _credentialStore = new Map();
 export class SettingsManager {
   constructor() {
     this.currentConfig = null;
@@ -326,14 +327,12 @@ export class SettingsManager {
             <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Username (email):</label>
             <input type="text" id="search-provider-ia-username-${index}" 
                   placeholder="${provider.username ? 'Configured' : 'user@example.com'}"
-                  data-original-username="${this.escapeHtml(provider.username || '')}"
                   style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
           </div>
           <div>
             <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Password:</label>
             <input type="password" id="search-provider-ia-password-${index}" 
                   placeholder="${provider.password ? '••••••••••••••••' : 'Enter password'}"
-                  data-original-password="${this.escapeHtml(provider.password || '')}"
                   style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
           </div>
         </div>
@@ -349,7 +348,6 @@ export class SettingsManager {
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API Key:</label>
           <input type="password" id="search-provider-key-${index}" placeholder="${provider.api_key ? '••••••••••••••••' : 'Enter API key'}"
-                data-original-key="${this.escapeHtml(provider.api_key || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
@@ -379,6 +377,12 @@ export class SettingsManager {
       `;
 
       div.innerHTML = html;
+      if (isInternetArchive) {
+        _credentialStore.set(`search-provider-ia-username-${index}`, provider.username || '');
+        _credentialStore.set(`search-provider-ia-password-${index}`, provider.password || '');
+      } else {
+        _credentialStore.set(`search-provider-key-${index}`, provider.api_key || '');
+      }
       list.appendChild(div);
     });
   }
@@ -441,7 +445,6 @@ export class SettingsManager {
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Password:</label>
           <input type="password" id="dc-password-${index}" placeholder="${client.password ? '••••••••••••••••' : 'Enter password'}"
-                data-original-password="${this.escapeHtml(client.password || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
@@ -462,7 +465,6 @@ export class SettingsManager {
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API Key:</label>
           <input type="password" id="dc-apikey-${index}" placeholder="${client.api_key ? '••••••••••••••••' : 'Enter API key'}"
-                data-original-key="${this.escapeHtml(client.api_key || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
@@ -501,6 +503,11 @@ export class SettingsManager {
       `;
 
       div.innerHTML = html;
+      if (client.type === 'qbittorrent') {
+        _credentialStore.set(`dc-password-${index}`, client.password || '');
+      } else if (client.type !== 'internet_archive') {
+        _credentialStore.set(`dc-apikey-${index}`, client.api_key || '');
+      }
       list.appendChild(div);
     });
   }
@@ -534,7 +541,7 @@ export class SettingsManager {
         if (pw) {
           clientUpdate.password = pw;
         } else {
-          const orig = pwInput?.dataset.originalPassword;
+          const orig = _credentialStore.get(`dc-password-${index}`);
           if (orig) clientUpdate.password = orig;
         }
         clientUpdate.default_category =
@@ -547,7 +554,7 @@ export class SettingsManager {
         if (key) {
           clientUpdate.api_key = key;
         } else {
-          const orig = keyInput?.dataset.originalKey;
+          const orig = _credentialStore.get(`dc-apikey-${index}`);
           if (orig) clientUpdate.api_key = orig;
         }
         clientUpdate.default_category =
@@ -643,7 +650,7 @@ export class SettingsManager {
         const url = document.getElementById(`dc-url-${index}`)?.value;
         const username = document.getElementById(`dc-username-${index}`)?.value;
         const pwInput = document.getElementById(`dc-password-${index}`);
-        const password = pwInput?.value || pwInput?.dataset.originalPassword;
+        const password = pwInput?.value || _credentialStore.get(`dc-password-${index}`);
 
         if (!url) {
           UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
@@ -655,7 +662,7 @@ export class SettingsManager {
         // sabnzbd / nzbget
         const url = document.getElementById(`dc-url-${index}`)?.value;
         const keyInput = document.getElementById(`dc-apikey-${index}`);
-        const apiKey = keyInput?.value || keyInput?.dataset.originalKey;
+        const apiKey = keyInput?.value || _credentialStore.get(`dc-apikey-${index}`);
 
         if (!url) {
           UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
@@ -1195,7 +1202,7 @@ export class SettingsManager {
           providerUpdate.username = usernameInput.value;
         } else if (usernameInput) {
           // Keep original if not changed
-          const originalUsername = usernameInput.dataset.originalUsername;
+          const originalUsername = _credentialStore.get(`search-provider-ia-username-${index}`);
           if (originalUsername) {
             providerUpdate.username = originalUsername;
           }
@@ -1205,7 +1212,7 @@ export class SettingsManager {
           providerUpdate.password = passwordInput.value;
         } else if (passwordInput) {
           // Keep original if not changed
-          const originalPassword = passwordInput.dataset.originalPassword;
+          const originalPassword = _credentialStore.get(`search-provider-ia-password-${index}`);
           if (originalPassword) {
             providerUpdate.password = originalPassword;
           }

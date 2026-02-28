@@ -7,6 +7,7 @@
 import { APIClient, APIHelper } from '../core/api.js';
 import { UIUtils } from '../core/ui-utils.js';
 import { API_LIMITS } from '../core/constants.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 /**
  * Stacks Manager class for managing stack CRUD and assignment
@@ -201,7 +202,7 @@ export class StacksManager {
     container.innerHTML = this.availableCategories
       .map((cat) => {
         const selected = this.selectedCategories.has(cat) ? ' selected' : '';
-        return `<button type="button" class="stack-category-pill${selected}" data-category="${cat}">${cat}</button>`;
+        return `<button type="button" class="stack-category-pill${selected}" data-category="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`;
       })
       .join('');
 
@@ -454,7 +455,7 @@ export class StacksManager {
           item.style.justifyContent = 'space-between';
           item.style.alignItems = 'center';
           item.innerHTML = `
-            <span>${member.title || 'Unknown'} <small style="color: var(--text-secondary)">(${member.type})</small></span>
+            <span>${escapeHtml(member.title || 'Unknown')} <small style="color: var(--text-secondary)">(${escapeHtml(member.type)})</small></span>
             <button class="btn-sm btn-danger-text" title="Remove">✕</button>
           `;
           const removeBtn = item.querySelector('button');
@@ -486,7 +487,7 @@ export class StacksManager {
       });
 
       // Add untracked library periodicals that aren't in any stack
-      const trackedPeriodicalIds = new Set(allTracked.map((t) => t.id));
+      const _trackedPeriodicalIds = new Set(allTracked.map((t) => t.id));
       allPeriodicals.forEach((p) => {
         // Only include if not tracked (no tracking_id) and not already in a stack
         if (!p.tracking_id && !p.stack_id && !memberPeriodicalIds.has(p.id)) {
@@ -511,7 +512,7 @@ export class StacksManager {
           el.style.justifyContent = 'space-between';
           el.style.alignItems = 'center';
           el.innerHTML = `
-            <span>${item.title} <small style="color: var(--text-secondary)">(${item.label})</small></span>
+            <span>${escapeHtml(item.title)} <small style="color: var(--text-secondary)">(${escapeHtml(item.label)})</small></span>
             <button class="btn-primary" style="padding: 4px 12px; font-size: 12px">Add</button>
           `;
           const addBtn = el.querySelector('button');

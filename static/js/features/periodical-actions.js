@@ -9,6 +9,7 @@ import { CSS_CLASSES, API_LIMITS } from '../core/constants.js';
 import { UIUtils } from '../core/ui-utils.js';
 import { isSpecialEdition } from './periodical-rendering.js';
 import { closeMetadataModal } from './periodical-metadata.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 // Module-level references to shared state (set via init)
 let _state = null;
@@ -221,9 +222,9 @@ export async function initBreadcrumb() {
     breadcrumb.innerHTML =
       `<a href="/#library">Library</a>` +
       `<span class="separator">/</span>` +
-      `<a href="/stacks/${stackSlug}">${stackName}</a>` +
+      `<a href="/stacks/${escapeHtml(stackSlug)}">${escapeHtml(stackName)}</a>` +
       `<span class="separator">/</span>` +
-      `<span class="current">${title}</span>`;
+      `<span class="current">${escapeHtml(title)}</span>`;
   } catch {
     // Ignore breadcrumb errors
   }

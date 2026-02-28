@@ -8,6 +8,7 @@ import { AuthManager } from '../core/auth.js';
 import { UIUtils } from '../core/ui-utils.js';
 import { APIClient } from '../core/api.js';
 import { initScrollCollapse } from '../core/scroll-collapse.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 /** @type {boolean} Whether a search is in progress */
 let isSearching = false;
@@ -320,7 +321,7 @@ async function searchStack() {
       (m, i) => `
     <div class="stack-search-row" id="search-row-${i}">
       <div class="stack-search-row-status" id="search-status-${i}">⏳</div>
-      <div class="stack-search-row-title">${m.title}${m.language && m.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${m.language}</span>` : ''}</div>
+      <div class="stack-search-row-title">${escapeHtml(m.title)}${m.language && m.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${escapeHtml(m.language)}</span>` : ''}</div>
       <div class="stack-search-row-actions" id="search-actions-${i}"></div>
       <div class="stack-search-row-result" id="search-result-${i}">Waiting...</div>
     </div>`

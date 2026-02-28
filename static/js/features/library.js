@@ -17,7 +17,7 @@ import {
 } from '../core/constants.js';
 import { ValidationError as _ValidationError } from '../core/errors.js';
 import { mediaWorker, Priority } from '../readers/media-worker-manager.js';
-import { stacks as stacksManager } from './stacks.js';
+import { stacks as _stacksManager } from './stacks.js';
 
 /**
  * Library Manager class for managing periodical library operations

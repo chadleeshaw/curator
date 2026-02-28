@@ -11,6 +11,7 @@ import {
   STORAGE_KEYS as _STORAGE_KEYS,
   DEFAULTS as _DEFAULTS,
 } from './constants.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 /**
  * UI Utilities class providing static methods for common UI operations
@@ -405,8 +406,8 @@ export class UIUtils {
       const modalHTML = `
         <div id="confirm-modal" class="modal modal-visible">
           <div class="modal-content modal-content-sm">
-            <h2>${title}</h2>
-            <p class="modal-message">${message}</p>
+            <h2>${escapeHtml(title)}</h2>
+            <p class="modal-message">${escapeHtml(message)}</p>
             <div class="modal-actions">
               <button id="confirm-yes" class="btn-primary flex-1">Yes</button>
               <button id="confirm-no" class="btn-secondary flex-1">No</button>
@@ -474,7 +475,7 @@ export class UIUtils {
     const modalHTML = `
       <div id="progress-modal" class="modal modal-visible">
         <div class="modal-content modal-content-md">
-          <h2>${title}</h2>
+          <h2>${escapeHtml(title)}</h2>
           <div class="progress-container">
             <div class="progress-header">
               <span id="progress-status" class="progress-status">Preparing...</span>

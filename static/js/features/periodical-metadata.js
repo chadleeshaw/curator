@@ -8,6 +8,7 @@
 import { APIClient, APIHelper } from '../core/api.js';
 import { CSS_CLASSES } from '../core/constants.js';
 import { getSpecialEditionValue, isSpecialEdition } from './periodical-rendering.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 // Module-level references to shared state (set via init)
 let _state = null;
@@ -234,7 +235,7 @@ export function displayMetadata(data) {
 
         const confBadge =
           typeof confidence === 'number' ? ` (${(confidence * 100).toFixed(0)}%)` : '';
-        valueDiv.innerHTML = `${value} <span style="font-size: 0.85em; color: var(--text-secondary); margin-left: 8px;">${sourceBadge}${confBadge}</span>`;
+        valueDiv.innerHTML = `${escapeHtml(String(value))} <span style="font-size: 0.85em; color: var(--text-secondary); margin-left: 8px;">${sourceBadge}${confBadge}</span>`;
 
         item.appendChild(labelDiv);
         item.appendChild(valueDiv);

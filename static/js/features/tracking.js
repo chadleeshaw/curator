@@ -847,11 +847,11 @@ export class TrackingManager {
             : '';
 
         const descHtml = description
-          ? `<span class="stack-group-desc"> — ${description}</span>`
+          ? `<span class="stack-group-desc"> — ${escapeHtml(description)}</span>`
           : '';
 
         const categoryBadges = (categories || [])
-          .map((c) => `<span class="stack-category-badge">${c}</span>`)
+          .map((c) => `<span class="stack-category-badge">${escapeHtml(c)}</span>`)
           .join('');
 
         header.innerHTML = `
@@ -860,7 +860,7 @@ export class TrackingManager {
           </button>
           <div class="stack-group-info">
             <div class="stack-group-title-row">
-              <span class="stack-group-name">${name}</span>${descHtml}
+              <span class="stack-group-name">${escapeHtml(name)}</span>${descHtml}
               ${categoryBadges ? `<span class="stack-category-badges">${categoryBadges}</span>` : ''}
             </div>
             <div class="stack-group-meta">
@@ -1067,7 +1067,7 @@ export class TrackingManager {
     }
 
     const countryStats = country
-      ? `<span class="country"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${country}</span>`
+      ? `<span class="country"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${escapeHtml(country)}</span>`
       : '';
     const issueStats =
       totalKnown > 0 ? `<span class="issue-count">${totalKnown} issues found</span>` : '';
@@ -1098,8 +1098,8 @@ export class TrackingManager {
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">
-          <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ${category ?? 'Auto-detect'}</span>
-          ${language ? `<span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${language}</span>` : ''}
+          <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ${escapeHtml(category ?? 'Auto-detect')}</span>
+          ${language ? `<span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${escapeHtml(language)}</span>` : ''}
           ${countryStats}
           ${issueStats}
           ${libraryStats}
@@ -1355,7 +1355,7 @@ export class TrackingManager {
     // Build progress UI
     issuesContent.innerHTML = `
       <div class="search-summary">
-        <h3>Searching stack: "${stackName}"</h3>
+        <h3>Searching stack: "${escapeHtml(stackName)}"</h3>
         <p style="color: var(--text-secondary); margin-top: 4px;">Searching ${items.length} tracked item${items.length !== 1 ? 's' : ''}...</p>
       </div>
       <div id="stack-search-rows" style="max-height: 70vh; overflow-y: auto;"></div>
@@ -1368,7 +1368,7 @@ export class TrackingManager {
       row.id = `stack-sr-${i}`;
       row.innerHTML = `
         <div class="stack-search-row-status" id="stack-sr-status-${i}">…</div>
-        <div class="stack-search-row-title">${item.title}${item.language && item.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${item.language}</span>` : ''}</div>
+        <div class="stack-search-row-title">${escapeHtml(item.title)}${item.language && item.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${escapeHtml(item.language)}</span>` : ''}</div>
         <div class="stack-search-row-actions" id="stack-sr-actions-${i}"></div>
         <div class="stack-search-row-result" id="stack-sr-result-${i}">Waiting...</div>`;
       rowsContainer.appendChild(row);
@@ -1672,14 +1672,14 @@ export class TrackingManager {
       } else {
         let errorInfo = '';
         if (data.provider_errors && data.provider_errors.length > 0) {
-          errorInfo = `<div style="margin-top: 15px; padding: 10px; background: #ffebee; color: var(--error-color); border-radius: 4px; font-size: 0.9em;"><strong>Provider Errors:</strong><br>${data.provider_errors.join('<br>')}</div>`;
+          errorInfo = `<div style="margin-top: 15px; padding: 10px; background: #ffebee; color: var(--error-color); border-radius: 4px; font-size: 0.9em;"><strong>Provider Errors:</strong><br>${data.provider_errors.map((e) => escapeHtml(e)).join('<br>')}</div>`;
         }
         issuesContent.innerHTML = `<div style="text-align: center; padding: 40px;"><p>No issues found for "${escapeHtml(title)}"</p>${errorInfo}</div>`;
       }
     } catch (err) {
       console.error('Error searching issues:', err);
       const issuesContent = document.getElementById('search-issues-content');
-      issuesContent.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--error-color);"><p>Failed to search for issues</p><p style="font-size: 0.9em; margin-top: 10px;">${err.message}</p></div>`;
+      issuesContent.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--error-color);"><p>Failed to search for issues</p><p style="font-size: 0.9em; margin-top: 10px;">${escapeHtml(err.message)}</p></div>`;
     }
   }
 
@@ -1696,7 +1696,7 @@ export class TrackingManager {
 
     results.forEach((result) => {
       // Prefer backend-parsed metadata; fall back to local parsing
-      let parsed = result.parsed_title
+      const parsed = result.parsed_title
         ? {
             year: result.parsed_title.year ?? 0,
             month: result.parsed_title.month ?? 0,
@@ -1724,7 +1724,7 @@ export class TrackingManager {
         // where the publication_date month is just an upload date, not an issue month)
         // Track whether the month came from the title or was backfilled, because
         // a backfilled month must not suppress the issue number from the dedup key.
-        let monthFromTitle = parsed.month > 0;
+        const monthFromTitle = parsed.month > 0;
         if (
           parsed.month === 0 &&
           !parsed.isCollection &&
@@ -2856,7 +2856,7 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
         ${providerInfo}
         ${statusBadges}
       </div>
-      <div class="variant-title">${variant.title}</div>
+      <div class="variant-title">${escapeHtml(variant.title)}</div>
     `;
     btn.onclick = () => {
       window.closeLangVariantModal();
@@ -2901,7 +2901,7 @@ window.showLibraryItemDetail = function (issueKey) {
       ? new Date(metadata.import_date).toLocaleDateString()
       : '';
     const filePath = copy.file_path || '';
-    const fileName = filePath ? filePath.split('/').pop() : '';
+    const _fileName = filePath ? filePath.split('/').pop() : '';
 
     // Add separator between copies
     if (index > 0) {
@@ -2917,14 +2917,14 @@ window.showLibraryItemDetail = function (issueKey) {
     detailHtml += `
     <div style="margin-bottom: 16px;">
       <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Original Filename</div>
-      <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.9em; word-break: break-all;">${importedFrom}</div>
+      <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.9em; word-break: break-all;">${escapeHtml(importedFrom)}</div>
     </div>`;
 
     if (filePath) {
       detailHtml += `
       <div style="margin-bottom: 16px;">
         <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Current Path</div>
-        <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.85em; word-break: break-all;">${filePath}</div>
+        <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.85em; word-break: break-all;">${escapeHtml(filePath)}</div>
       </div>`;
     }
 
@@ -3022,7 +3022,7 @@ window.showLibraryItemDetail = function (issueKey) {
           ${ageBadge}
           ${providerInfo}
         </div>
-        <div class="variant-title">${variant.title}</div>
+        <div class="variant-title">${escapeHtml(variant.title)}</div>
       `;
       btn.onclick = () => {
         window.closeLibraryDetailModal();
@@ -3044,7 +3044,7 @@ window.closeLibraryDetailModal = function () {
  * @param {number} periodicalId - The periodical database ID
  * @param {string} issueKey - The issue key to refresh the modal after deletion
  */
-window.deleteLibraryCopy = async function (periodicalId, issueKey) {
+window.deleteLibraryCopy = async function (periodicalId, _issueKey) {
   const confirmed = await UIUtils.confirm(
     'Remove from Library',
     '<p>Remove this copy from your library?</p>' +
@@ -3111,7 +3111,7 @@ window.moveLibraryCopy = async function (periodicalId, issueKey) {
       .sort((a, b) => a.title.localeCompare(b.title))
       .map(
         (t) =>
-          `<option value="${t.id}">${t.title} (${t.category || 'Auto-detect'} - ${t.language || 'English'})</option>`
+          `<option value="${t.id}">${escapeHtml(t.title)} (${escapeHtml(t.category || 'Auto-detect')} - ${escapeHtml(t.language || 'English')})</option>`
       )
       .join('');
 
@@ -3172,7 +3172,7 @@ window.closeMoveLibraryCopyModal = function () {
  * @param {number} periodicalId - The periodical database ID
  * @param {string} issueKey - The issue key to refresh after move
  */
-window.confirmMoveLibraryCopy = async function (periodicalId, issueKey) {
+window.confirmMoveLibraryCopy = async function (periodicalId, _issueKey) {
   const targetId = document.getElementById('move-copy-target-tracking')?.value;
   if (!targetId) return;
 
@@ -3222,7 +3222,7 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded, do
   }
 
   // Build confirmation message with filename
-  let confirmMessage = `<p><strong>File:</strong> ${title}</p><p><strong>Provider:</strong> ${provider}</p>`;
+  let confirmMessage = `<p><strong>File:</strong> ${escapeHtml(title)}</p><p><strong>Provider:</strong> ${escapeHtml(provider)}</p>`;
   if (alreadyDownloaded) {
     confirmMessage +=
       '<p style="color: #ff9800; margin-top: 10px;">You already have this issue in your library.</p><p>Re-download it anyway?</p>';
@@ -3285,8 +3285,8 @@ window.openMergeModal = async function () {
       <div class="merge-select-item">
         <input type="checkbox" id="merge-check-${item.id}" value="${item.id}" class="merge-selection-checkbox">
         <label for="merge-check-${item.id}">
-          <strong>${item.title}</strong><br>
-          <span style="font-size: 12px; color: var(--text-secondary);">Language: ${item.language || 'Unknown'} | Country: ${item.country || 'N/A'}</span>
+          <strong>${escapeHtml(item.title)}</strong><br>
+          <span style="font-size: 12px; color: var(--text-secondary);">Language: ${escapeHtml(item.language || 'Unknown')} | Country: ${escapeHtml(item.country || 'N/A')}</span>
         </label>
       </div>
     `
@@ -3375,7 +3375,7 @@ window.showMergeTargetSelection = async function () {
   const options = selectedItems
     .map(
       (item) =>
-        `<option value="${item.id}">${item.title} (${item.language || 'Unknown'} - ${item.country || 'N/A'})</option>`
+        `<option value="${item.id}">${escapeHtml(item.title)} (${escapeHtml(item.language || 'Unknown')} - ${escapeHtml(item.country || 'N/A')})</option>`
     )
     .join('');
 

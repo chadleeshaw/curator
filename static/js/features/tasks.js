@@ -96,7 +96,7 @@ export class TasksManager {
     // eslint-disable-next-line no-undef
     const timezone = data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    tasksList.innerHTML = data.tasks
+    const tasksHtml = data.tasks
       .map((task) => {
         const lastRun = task.last_run ? new Date(task.last_run).toLocaleString() : 'Never';
         const nextRun = task.next_run ? new Date(task.next_run).toLocaleString() : 'Pending';
@@ -127,30 +127,40 @@ export class TasksManager {
           <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px; flex-wrap: wrap;">
             <div style="flex: 1; min-width: 300px; ${disabledStyle}">
               <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                <strong style="font-size: 1.1em; color: var(--text-primary);">${task.name}</strong>
-                <label class="task-toggle" title="${isEnabled ? 'Disable' : 'Enable'} ${task.name}">
-                  <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleTask('${task.id}')">
+                <strong style="font-size: 1.1em; color: var(--text-primary);">${this.escapeHtml(task.name)}</strong>
+                <label class="task-toggle" title="${isEnabled ? 'Disable' : 'Enable'} ${this.escapeHtml(task.name)}">
+                  <input type="checkbox" ${isEnabled ? 'checked' : ''} class="task-toggle-input" data-task-id="${this.escapeHtml(task.id)}">
                   <span class="task-toggle-slider"></span>
                 </label>
                 ${!isEnabled ? '<span style="font-size: 0.8em; color: var(--text-hint); font-style: italic;">Disabled</span>' : ''}
               </div>
               <div style="color: var(--text-secondary); font-size: 0.9em;">
-                <div style="margin-bottom: 10px;">${task.description || ''}</div>
+                <div style="margin-bottom: 10px;">${this.escapeHtml(task.description || '')}</div>
                 <div style="display: grid; gap: 4px;">
                   <div>Interval: ${task.interval}s</div>
                   <div>✓ Last run: ${lastRun}</div>
                   <div>Next run: ${isEnabled ? nextRun : 'Disabled'}</div>
-                  ${task.last_status ? `<div style="color: ${task.last_status === 'success' ? 'var(--status-completed)' : 'var(--status-failed)'};">Status: ${task.last_status}</div>` : ''}
+                  ${task.last_status ? `<div style="color: ${task.last_status === 'success' ? 'var(--status-completed)' : 'var(--status-failed)'};">Status: ${this.escapeHtml(task.last_status)}</div>` : ''}
                 </div>
               </div>
               ${timestampsHtml}
             </div>
-            <button onclick="runTaskManually('${task.id}')" class="btn-primary" style="flex-shrink: 0;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Now</button>
+            <button class="btn-primary task-run-btn" data-task-id="${this.escapeHtml(task.id)}" style="flex-shrink: 0;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Now</button>
           </div>
         </div>
       `;
       })
       .join('');
+
+    tasksList.innerHTML = tasksHtml;
+
+    // Attach event listeners for task controls (avoids inline JS injection)
+    tasksList.querySelectorAll('.task-toggle-input').forEach((input) => {
+      input.addEventListener('change', () => this.toggleTask(input.dataset.taskId));
+    });
+    tasksList.querySelectorAll('.task-run-btn').forEach((btn) => {
+      btn.addEventListener('click', () => this.runTaskManually(btn.dataset.taskId));
+    });
 
     // Add timezone info at the top with consistent styling
     if (timezone) {
@@ -159,7 +169,7 @@ export class TasksManager {
         `
         <div style="padding: 15px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
           <span style="color: var(--text-secondary);">Timezone:</span>
-          <strong style="color: var(--text-primary);">${timezone}</strong>
+          <strong style="color: var(--text-primary);">${this.escapeHtml(timezone)}</strong>
         </div>
       `
       );
