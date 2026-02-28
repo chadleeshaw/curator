@@ -3,10 +3,14 @@
 import asyncio
 import json
 import logging
+import time
+import uuid
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from web.routers.auth import get_verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +21,9 @@ _event_bus = None
 _auth_manager = None
 
 SSE_KEEPALIVE_TIMEOUT = 30  # seconds before sending a keepalive comment
+_TICKET_TTL = 30  # seconds before a ticket expires
+
+_tickets: dict[str, float] = {}
 
 
 def set_dependencies(event_bus, auth_manager) -> None:
@@ -25,14 +32,17 @@ def set_dependencies(event_bus, auth_manager) -> None:
     _auth_manager = auth_manager
 
 
-def _verify_token(token: str) -> bool:
-    if not _auth_manager or not token:
-        return False
-    is_valid, _ = _auth_manager.verify_token(token)
-    if is_valid:
-        return True
-    is_valid, _ = _auth_manager.verify_api_token(token)
-    return is_valid
+def _validate_ticket(ticket: str) -> None:
+    """Validate a one-time SSE ticket. Purges expired tickets, checks existence, deletes on use."""
+    now = time.time()
+    expired = [t for t, ts in _tickets.items() if now - ts > _TICKET_TTL]
+    for t in expired:
+        del _tickets[t]
+
+    if ticket not in _tickets:
+        raise HTTPException(status_code=401, detail="Invalid or expired ticket")
+
+    del _tickets[ticket]
 
 
 async def _event_stream(channel: str) -> AsyncGenerator[str, None]:
@@ -67,25 +77,29 @@ def _not_ready() -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": "Service not ready"})
 
 
-def _unauthorized() -> JSONResponse:
-    return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+@router.post("/ticket")
+async def create_sse_ticket(
+    _username: str = Depends(get_verify_token),
+) -> dict:
+    """Issue a short-lived one-time ticket for SSE authentication."""
+    ticket = str(uuid.uuid4())
+    _tickets[ticket] = time.time()
+    return {"ticket": ticket}
 
 
 @router.get("/downloads")
-async def sse_downloads(token: str = Query(...)):
+async def sse_downloads(ticket: str = Query(...)):
     """SSE endpoint for download queue updates."""
-    if not _verify_token(token):
-        return _unauthorized()
+    _validate_ticket(ticket)
     if _event_bus is None:
         return _not_ready()
     return _sse_response("download_queue")
 
 
 @router.get("/ocr")
-async def sse_ocr(token: str = Query(...)):
+async def sse_ocr(ticket: str = Query(...)):
     """SSE endpoint for OCR queue updates."""
-    if not _verify_token(token):
-        return _unauthorized()
+    _validate_ticket(ticket)
     if _event_bus is None:
         return _not_ready()
     return _sse_response("ocr_queue")

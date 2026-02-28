@@ -572,7 +572,7 @@ export class DownloadsManager {
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
           <div>
-            <span style="font-size: 1.1em;">${periodical}</span>
+            <span style="font-size: 1.1em;">${escapeHtml(periodical)}</span>
             <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
           </div>
           <div class="mobile-summary" style="display: none; margin-top: 6px;">
@@ -837,7 +837,7 @@ export class DownloadsManager {
             submission_id: submissionId,
             created_at: createdAt,
             status,
-            error,
+            _error,
           } = item;
           const statusColor = this.getStatusColor(status);
 
@@ -859,7 +859,7 @@ export class DownloadsManager {
           let displayTitle = title;
           if (title === periodical) {
             const date = createdAt ? new Date(createdAt).toLocaleDateString() : '';
-            displayTitle = `${title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
+            displayTitle = `${escapeHtml(title)} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
           }
 
           // Build status info with error or extra_status
@@ -869,7 +869,7 @@ export class DownloadsManager {
             const waitLabel = waitTime ? `WAIT ${waitTime} sec` : 'WAIT';
             statusInfo = `<span style="background: var(--status-pending); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">⏸ ${waitLabel}</span>`;
           } else {
-            statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
+            statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${escapeHtml(status)}</span>`;
           }
 
           // Show progress bar for active downloads
@@ -884,7 +884,7 @@ export class DownloadsManager {
                     <span style="color: white; font-size: 0.7em; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${progress}%</span>
                   </div>
                 </div>
-                ${timeLeft || size ? `<div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px;">${size ? size + ' ' : ''}${timeLeft ? '• ' + timeLeft : ''}</div>` : ''}
+                ${timeLeft || size ? `<div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px;">${size ? escapeHtml(size) + ' ' : ''}${timeLeft ? '• ' + escapeHtml(timeLeft) : ''}</div>` : ''}
               </div>`;
           }
 
@@ -1052,11 +1052,11 @@ export class DownloadsManager {
 
         return `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${title}</td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${escapeHtml(title)}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
             <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${attemptCount}/${maxAttempts}</span>
           </td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${lastError ?? 'Unknown'}</td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${escapeHtml(lastError ?? 'Unknown')}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
             <button onclick="downloads.retryFailedIssue(${id})" class="btn-primary" style="padding: 4px 8px;">Retry</button>
           </td>
@@ -1328,7 +1328,7 @@ export class DownloadsManager {
       ['Periodical', item.periodical || '-'],
       [
         'Status',
-        `<span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">${item.status}</span>`,
+        `<span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">${escapeHtml(item.status)}</span>`,
       ],
       ['Submission ID', `#${item.submission_id}`],
       ['Job ID', item.job_id || '-'],
@@ -1341,19 +1341,19 @@ export class DownloadsManager {
     if (item.url) {
       rows.push([
         'Source URL',
-        `<span style="word-break: break-all; font-size: 0.85em;">${item.url}</span>`,
+        `<span style="word-break: break-all; font-size: 0.85em;">${escapeHtml(item.url)}</span>`,
       ]);
     }
     if (item.extra_status) {
       rows.push([
         'Extra Status',
-        `<span style="color: var(--status-pending);">${item.extra_status}</span>`,
+        `<span style="color: var(--status-pending);">${escapeHtml(item.extra_status)}</span>`,
       ]);
     }
     if (item.error) {
       rows.push([
         'Error',
-        `<span style="color: var(--status-failed); word-break: break-word;">${item.error}</span>`,
+        `<span style="color: var(--status-failed); word-break: break-word;">${escapeHtml(item.error)}</span>`,
       ]);
     }
 
@@ -1370,7 +1370,7 @@ export class DownloadsManager {
     const html = `
       <div class="modal-header">
         <h3>Download Details</h3>
-        <p style="color: var(--text-secondary); margin-top: 6px; font-size: 0.9em;">${item.title || 'Unknown'}</p>
+        <p style="color: var(--text-secondary); margin-top: 6px; font-size: 0.9em;">${escapeHtml(item.title || 'Unknown')}</p>
       </div>
       <div class="modal-body" style="margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">
@@ -1635,28 +1635,35 @@ export class DownloadsManager {
       return;
     }
 
-    try {
-      this._eventSource = new EventSource(`/api/sse/downloads?token=${encodeURIComponent(token)}`);
+    APIClient.post('/api/sse/ticket')
+      .then((resp) => resp.json())
+      .then(({ ticket }) => {
+        try {
+          this._eventSource = new EventSource(`/api/sse/downloads?ticket=${encodeURIComponent(ticket)}`);
 
-      this._eventSource.onmessage = () => {
-        const queueTab = document.getElementById('queue-tab');
-        if (queueTab?.classList.contains('active')) {
-          this.loadDownloadQueue();
-        }
-      };
+          this._eventSource.onmessage = () => {
+            const queueTab = document.getElementById('queue-tab');
+            if (queueTab?.classList.contains('active')) {
+              this.loadDownloadQueue();
+            }
+          };
 
-      this._eventSource.onerror = () => {
-        // Only fall back to polling when the browser has given up reconnecting
-        // (readyState CLOSED). Transient errors use readyState CONNECTING and
-        // the browser will auto-reconnect — closing manually would prevent that.
-        if (this._eventSource?.readyState === EventSource.CLOSED) {
-          this._eventSource = null;
+          this._eventSource.onerror = () => {
+            // Only fall back to polling when the browser has given up reconnecting
+            // (readyState CLOSED). Transient errors use readyState CONNECTING and
+            // the browser will auto-reconnect — closing manually would prevent that.
+            if (this._eventSource?.readyState === EventSource.CLOSED) {
+              this._eventSource = null;
+              this._fallbackToPolling();
+            }
+          };
+        } catch (_err) {
           this._fallbackToPolling();
         }
-      };
-    } catch (_err) {
-      this._fallbackToPolling();
-    }
+      })
+      .catch(() => {
+        this._fallbackToPolling();
+      });
   }
 
   /**

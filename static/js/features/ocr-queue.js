@@ -12,6 +12,7 @@ import {
   CSS_CLASSES,
   TIMEOUTS as _TIMEOUTS,
 } from '../core/constants.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 export class OCRQueueManager {
   constructor() {
@@ -261,7 +262,7 @@ export class OCRQueueManager {
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
           <div>
-            <span style="font-size: 1.1em;">${periodical}</span>
+            <span style="font-size: 1.1em;">${escapeHtml(periodical)}</span>
             <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${jobs.length} issue${jobs.length !== 1 ? 's' : ''}</span>
           </div>
           <div class="mobile-summary" style="display: none; margin-top: 6px;">
@@ -437,7 +438,7 @@ export class OCRQueueManager {
         .map((job) => {
           const statusColor = this.getStatusColor(job.status);
           const issueInfo =
-            `${job.periodical_issue || 'Unknown Issue'} ${job.periodical_year ? `(${job.periodical_year})` : ''}`.trim();
+            `${escapeHtml(job.periodical_issue || 'Unknown Issue')} ${job.periodical_year ? `(${escapeHtml(String(job.periodical_year))})` : ''}`.trim();
 
           // Format relative time
           const timestamp = job.completed_at || job.created_at;
@@ -456,7 +457,7 @@ export class OCRQueueManager {
           return `
           <tr style="background: var(--surface-variant); border-radius: 6px;">
             <td style="padding: 14px; border-bottom: 1px solid var(--border-color);">
-              <div style="font-weight: 600;">${job.periodical_title}</div>
+              <div style="font-weight: 600;">${escapeHtml(job.periodical_title)}</div>
               <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">${issueInfo}</div>
             </td>
             <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
@@ -482,7 +483,7 @@ export class OCRQueueManager {
 
     const html = `
       <div class="modal-header">
-        <h3>OCR Queue: ${periodical}</h3>
+        <h3>OCR Queue: ${escapeHtml(periodical)}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${jobs.length} issue${jobs.length !== 1 ? 's' : ''} - ${statusList}</p>
         <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
           ${filterButtons}
@@ -604,7 +605,7 @@ export class OCRQueueManager {
       // Format metadata for display
       let metadataHtml = '<p style="color: var(--text-secondary);">No OCR metadata available</p>';
       if (job.ocr_metadata) {
-        metadataHtml = `<pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; max-height: 400px; overflow-y: auto;">${JSON.stringify(job.ocr_metadata, null, 2)}</pre>`;
+        metadataHtml = `<pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; max-height: 400px; overflow-y: auto;">${escapeHtml(JSON.stringify(job.ocr_metadata, null, 2))}</pre>`;
       }
 
       // Format error if present
@@ -613,7 +614,7 @@ export class OCRQueueManager {
         errorHtml = `
           <div style="margin-top: 20px;">
             <h4 style="color: var(--status-failed); margin-bottom: 10px;">Error Details</h4>
-            <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--text-secondary);">${job.last_error}</pre>
+            <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--text-secondary);">${escapeHtml(job.last_error)}</pre>
           </div>
         `;
       }
@@ -621,8 +622,8 @@ export class OCRQueueManager {
       const html = `
         <div class="modal-header">
           <h3>OCR Job Details</h3>
-          <p style="font-weight: 600; margin-top: 10px;">${job.periodical_title}</p>
-          <p style="color: var(--text-secondary); font-size: 0.9em;">${job.periodical_issue || 'Unknown Issue'} ${job.periodical_year ? `(${job.periodical_year})` : ''}</p>
+          <p style="font-weight: 600; margin-top: 10px;">${escapeHtml(job.periodical_title)}</p>
+          <p style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(job.periodical_issue || 'Unknown Issue')} ${job.periodical_year ? `(${escapeHtml(String(job.periodical_year))})` : ''}</p>
         </div>
         <div class="modal-body" style="max-height: 500px; overflow-y: auto; margin: 20px 0;">
           <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; margin-bottom: 20px;">
@@ -631,7 +632,7 @@ export class OCRQueueManager {
             <strong>Priority:</strong>
             <span>${this.getPriorityBadge(job.priority)}</span>
             <strong>Language:</strong>
-            <span>${job.language || 'N/A'}</span>
+            <span>${escapeHtml(job.language || 'N/A')}</span>
             <strong>Attempts:</strong>
             <span>${job.attempt_count}/${this.maxRetries}</span>
             ${job.processing_time_seconds ? `<strong>Processing Time:</strong><span>${job.processing_time_seconds}s</span>` : ''}
@@ -730,7 +731,7 @@ export class OCRQueueManager {
     modalContent.innerHTML = `
       <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">Remove OCR Job</h3>
       <p style="margin: 0 0 12px 0; color: var(--text-secondary);">Are you sure you want to remove this OCR job from the queue?</p>
-      <p style="margin: 0 0 20px 0; color: var(--text-primary); font-weight: 600;">${jobTitle}</p>
+      <p style="margin: 0 0 20px 0; color: var(--text-primary); font-weight: 600;">${escapeHtml(jobTitle)}</p>
       <div style="display: flex; gap: 10px; justify-content: flex-end;"></div>
     `;
 
@@ -841,28 +842,35 @@ export class OCRQueueManager {
       return;
     }
 
-    try {
-      this._eventSource = new EventSource(`/api/sse/ocr?token=${encodeURIComponent(token)}`);
+    APIClient.post('/api/sse/ticket')
+      .then((resp) => resp.json())
+      .then(({ ticket }) => {
+        try {
+          this._eventSource = new EventSource(`/api/sse/ocr?ticket=${encodeURIComponent(ticket)}`);
 
-      this._eventSource.onmessage = () => {
-        const queueTab = document.getElementById('queue-tab');
-        if (queueTab?.classList.contains('active')) {
-          this.loadQueue();
-        }
-      };
+          this._eventSource.onmessage = () => {
+            const queueTab = document.getElementById('queue-tab');
+            if (queueTab?.classList.contains('active')) {
+              this.loadQueue();
+            }
+          };
 
-      this._eventSource.onerror = () => {
-        // Only fall back to polling when the browser has given up reconnecting
-        // (readyState CLOSED). Transient errors use readyState CONNECTING and
-        // the browser will auto-reconnect — closing manually would prevent that.
-        if (this._eventSource?.readyState === EventSource.CLOSED) {
-          this._eventSource = null;
+          this._eventSource.onerror = () => {
+            // Only fall back to polling when the browser has given up reconnecting
+            // (readyState CLOSED). Transient errors use readyState CONNECTING and
+            // the browser will auto-reconnect — closing manually would prevent that.
+            if (this._eventSource?.readyState === EventSource.CLOSED) {
+              this._eventSource = null;
+              this._fallbackToPolling();
+            }
+          };
+        } catch (_err) {
           this._fallbackToPolling();
         }
-      };
-    } catch (_err) {
-      this._fallbackToPolling();
-    }
+      })
+      .catch(() => {
+        this._fallbackToPolling();
+      });
   }
 
   /**
