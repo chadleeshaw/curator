@@ -3,7 +3,7 @@ export default [
     ignores: ['node_modules/**', '.venv/**', '.node_modules/**'],
   },
   {
-    files: ['static/js/*.js'],
+    files: ['static/js/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -25,6 +25,7 @@ export default [
         clearTimeout: 'readonly',
         getComputedStyle: 'readonly',
         navigator: 'readonly',
+        EventSource: 'readonly',
       },
     },
     rules: {

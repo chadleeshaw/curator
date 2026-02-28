@@ -4,7 +4,7 @@
  * Supports thumbnails, PDF pages, and comic book pages with prioritized loading
  */
 
-/* global self */
+/* global self, DOMException */
 
 /**
  * Cache entry structure
@@ -14,6 +14,8 @@
  * @property {number} timestamp - When it was cached
  * @property {string} type - Media type (thumbnail, pdf-page, comic-page)
  */
+
+let _authToken = null;
 
 class MediaWorker {
   constructor() {
@@ -84,20 +86,19 @@ class MediaWorker {
     }
 
     // Wait for a slot to become available
-    return new Promise((resolve) => {
-      this.pendingQueue.push(resolve);
+    // Wait for a slot to become available
+    return new Promise((resolve, reject) => {
+      this.pendingQueue.push({ resolve, reject });
     });
-  }
 
   /**
    * Release a connection slot and process pending queue
    */
-  releaseSlot() {
     this.activeRequests--;
 
     // If there are pending requests, give them a slot
     if (this.pendingQueue.length > 0) {
-      const resolve = this.pendingQueue.shift();
+      const { resolve } = this.pendingQueue.shift();
       this.activeRequests++;
       resolve();
     }
@@ -154,10 +155,9 @@ class MediaWorker {
    */
   async fetchAndCache(url, type, key) {
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      const response = await fetch(url, {
+        headers: _authToken ? { Authorization: `Bearer ${_authToken}` } : {},
+      });
 
       const blob = await response.blob();
       const blobSize = this.getBlobSizeMB(blob);
@@ -228,6 +228,11 @@ class MediaWorker {
     const { type, urlPattern } = data;
 
     if (!type && !urlPattern) {
+      // Reject all pending slot-wait promises before clearing
+      for (const { reject } of this.pendingQueue) {
+        reject(new DOMException('Worker cache cleared', 'AbortError'));
+      }
+      this.pendingQueue.length = 0;
       // Clear all
       this.cache.clear();
       this.loading.clear();
@@ -314,6 +319,10 @@ self.onmessage = async function (e) {
     let result;
 
     switch (type) {
+      case 'init':
+        _authToken = e.data.token ?? null;
+        self.postMessage({ type, result: { success: true }, id });
+        return;
       case 'prefetch':
         result = await worker.prefetchMedia(data);
         break;

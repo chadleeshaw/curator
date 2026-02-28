@@ -96,6 +96,11 @@ export class APIClient {
         throw error;
       }
 
+      // AbortError means the request was intentionally cancelled — don't treat as a network error
+      if (error.name === 'AbortError') {
+        throw error;
+      }
+
       // Network or other fetch errors
       console.error(`[APIClient] Request failed for ${url}:`, error);
       throw new NetworkError(`Failed to connect to ${url}: ${error.message}`, url, error);
@@ -114,8 +119,8 @@ export class APIClient {
    * const response = await APIClient.get('/api/periodicals?page=1');
    * const { periodicals } = await response.json();
    */
-  static async get(url) {
-    return this.authenticatedFetch(url);
+  static async get(url, { signal } = {}) {
+    return this.authenticatedFetch(url, { signal });
   }
 
   /**
@@ -134,16 +139,16 @@ export class APIClient {
    * });
    * const result = await response.json();
    */
-  static async post(url, data) {
+  static async post(url, data, { signal } = {}) {
     return this.authenticatedFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
+      signal,
     });
   }
-
   /**
    * Perform a PUT request with JSON body
    *
@@ -158,16 +163,16 @@ export class APIClient {
    *   track_all_editions: true
    * });
    */
-  static async put(url, data) {
+  static async put(url, data, { signal } = {}) {
     return this.authenticatedFetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
+      signal,
     });
   }
-
   /**
    * Perform a DELETE request
    *
@@ -180,9 +185,10 @@ export class APIClient {
    * const response = await APIClient.delete('/api/tracking/123');
    * const { success } = await response.json();
    */
-  static async delete(url) {
+  static async delete(url, { signal } = {}) {
     return this.authenticatedFetch(url, {
       method: 'DELETE',
+      signal,
     });
   }
 }

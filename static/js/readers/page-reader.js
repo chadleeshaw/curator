@@ -20,6 +20,8 @@ import {
 /**
  * Configuration for different content types
  */
+const MAX_PREFETCH_CACHE_SIZE = 30;
+
 const READER_CONFIGS = {
   pdf: {
     apiPrefix: 'pdf',
@@ -131,6 +133,9 @@ export class PageReader {
 
     // Load saved progress
     await this.progressManager.load();
+    // Register cleanup on page unload
+    window.addEventListener('beforeunload', () => this.cleanup(), { once: true });
+
   }
 
   /**
@@ -432,6 +437,14 @@ export class PageReader {
             img.src = objectUrl;
             img.onload = () => {
               this.prefetchCache.set(index, img);
+              if (this.prefetchCache.size > MAX_PREFETCH_CACHE_SIZE) {
+                const oldestKey = this.prefetchCache.keys().next().value;
+                const oldestImg = this.prefetchCache.get(oldestKey);
+                if (oldestImg?.src?.startsWith('blob:')) {
+                  URL.revokeObjectURL(oldestImg.src);
+                }
+                this.prefetchCache.delete(oldestKey);
+              }
               console.log(`Prefetched page ${index + 1} via worker`);
             };
           }
@@ -443,6 +456,10 @@ export class PageReader {
       const img = new Image();
       img.onload = () => {
         this.prefetchCache.set(index, img);
+        if (this.prefetchCache.size > MAX_PREFETCH_CACHE_SIZE) {
+          const oldestKey = this.prefetchCache.keys().next().value;
+          this.prefetchCache.delete(oldestKey);
+        }
         console.log(`Prefetched page ${index + 1}`);
       };
       img.onerror = () => {
@@ -718,13 +735,33 @@ export class PageReader {
       }
     };
 
-    window.addEventListener('orientationchange', handleOrientationChange);
-
     let resizeTimer = null;
-    window.addEventListener('resize', () => {
+    this._boundOrientationChange = handleOrientationChange;
+    this._boundResize = () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(handleOrientationChange, 300);
-    });
+    };
+
+    window.addEventListener('orientationchange', this._boundOrientationChange);
+    window.addEventListener('resize', this._boundResize);
+  }
+
+  /**
+   * Clean up window event listeners and cached blob URLs
+   */
+  cleanup() {
+    if (this._boundOrientationChange) {
+      window.removeEventListener('orientationchange', this._boundOrientationChange);
+    }
+    if (this._boundResize) {
+      window.removeEventListener('resize', this._boundResize);
+    }
+    for (const img of this.prefetchCache.values()) {
+      if (img?.src?.startsWith('blob:')) {
+        URL.revokeObjectURL(img.src);
+      }
+    }
+    this.prefetchCache.clear();
   }
 
   /**

@@ -24,6 +24,7 @@ export class MediaWorkerManager {
     this.messageId = 0;
     this.pendingMessages = new Map();
     this.initialized = false;
+    this._objectURLs = new Set();
   }
 
   /**
@@ -38,6 +39,10 @@ export class MediaWorkerManager {
       this.worker.onmessage = this.handleMessage.bind(this);
       this.worker.onerror = this.handleError.bind(this);
       this.initialized = true;
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        this.worker.postMessage({ type: 'init', token });
+      }
       console.log('[MediaWorker] Initialized successfully');
     } catch (error) {
       console.error('[MediaWorker] Failed to initialize:', error);
@@ -195,7 +200,9 @@ export class MediaWorkerManager {
   async getObjectURL(url) {
     const result = await this.getCached(url);
     if (result.cached && result.blob) {
-      return URL.createObjectURL(result.blob);
+      const objectURL = URL.createObjectURL(result.blob);
+      this._objectURLs.add(objectURL);
+      return objectURL;
     }
     return null;
   }
@@ -209,6 +216,10 @@ export class MediaWorkerManager {
       this.worker = null;
       this.initialized = false;
       this.pendingMessages.clear();
+      for (const objectURL of this._objectURLs) {
+        URL.revokeObjectURL(objectURL);
+      }
+      this._objectURLs.clear();
       console.log('[MediaWorker] Terminated');
     }
   }

@@ -16,6 +16,55 @@ import {
   setupKeyboardNavigation,
 } from './reader-utils.js';
 
+/**
+ * Sanitize HTML from EPUB chapters using DOMParser to strip XSS vectors.
+ * Removes scripts, inline event handlers, and javascript: URIs before
+ * injecting content into the DOM.
+ *
+ * @param {string} html - Raw HTML string from EPUB chapter
+ * @returns {string} Sanitized HTML string safe for innerHTML assignment
+ */
+function sanitizeEpubHtml(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // Remove dangerous elements entirely
+  doc
+    .querySelectorAll('script, style, iframe, object, embed, form, meta, link')
+    .forEach((el) => el.remove());
+
+  // Strip inline event handler attributes and unsafe URL schemes
+  const eventAttrs = [
+    'onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur',
+    'onkeydown', 'onkeyup', 'onkeypress', 'onchange', 'onsubmit', 'onreset',
+    'onselect', 'ondblclick', 'onmousedown', 'onmouseup', 'onmousemove',
+    'onmouseout', 'onmouseenter', 'onmouseleave', 'oncontextmenu', 'onwheel',
+    'ondrag', 'ondragend', 'ondragenter', 'ondragleave', 'ondragover',
+    'ondragstart', 'ondrop',
+  ];
+
+  doc.querySelectorAll('*').forEach((el) => {
+    eventAttrs.forEach((attr) => el.removeAttribute(attr));
+
+    // Remove javascript: URIs from href / src / action
+    ['href', 'src', 'action'].forEach((attr) => {
+      const val = el.getAttribute(attr);
+      if (val && /^\s*javascript:/i.test(val)) el.removeAttribute(attr);
+    });
+
+    // Remove data: URIs from non-image src (potential XSS vector)
+    const src = el.getAttribute('src');
+    if (src && /^\s*data:/i.test(src) && el.tagName !== 'IMG') {
+      el.removeAttribute('src');
+    }
+  });
+
+  // Return sanitized body content (EPUB chapters are body fragments)
+  return doc.body ? doc.body.innerHTML : doc.documentElement.innerHTML;
+}
+
+const MAX_CHAPTER_CACHE_SIZE = 25;
+
 class EPUBReader {
   constructor() {
     this.periodicalId = null;
@@ -168,10 +217,13 @@ class EPUBReader {
         }, 'EPUBReader');
         // Cache the chapter
         this.chapterCache.set(index, html);
+        if (this.chapterCache.size > MAX_CHAPTER_CACHE_SIZE) {
+          const oldestKey = this.chapterCache.keys().next().value;
+          this.chapterCache.delete(oldestKey);
+        }
       }
-
       // Display chapter content
-      contentDiv.innerHTML = `<div class="chapter-content-inner" style="font-size: ${this.zoomLevel}%;">${html}</div>`;
+      contentDiv.innerHTML = `<div class="chapter-content-inner" style="font-size: ${this.zoomLevel}%;">${sanitizeEpubHtml(html)}</div>`;
 
       // Setup lazy loading for images
       this.setupImageLazyLoading(contentDiv);
@@ -271,7 +323,10 @@ class EPUBReader {
       if (response.ok) {
         const html = await response.text();
         this.chapterCache.set(index, html);
-        console.log(`Prefetched chapter ${index + 1}`);
+        if (this.chapterCache.size > MAX_CHAPTER_CACHE_SIZE) {
+          const oldestKey = this.chapterCache.keys().next().value;
+          this.chapterCache.delete(oldestKey);
+        }
         this.prefetchChapterImages(html);
       }
     } catch (error) {
