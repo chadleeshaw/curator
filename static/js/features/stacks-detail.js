@@ -259,7 +259,7 @@ function createMemberCard(item) {
   if (item.type === 'tracking') {
     const count = item.library_count || 0;
     if (count > 0) {
-      subtitle.textContent = `${count} issue${count !== 1 ? 's' : ''} in library`;
+      subtitle.textContent = `${count} issue${count !== 1 ? 's' : ''}`;
     } else {
       subtitle.textContent = 'Tracking · no issues yet';
     }
