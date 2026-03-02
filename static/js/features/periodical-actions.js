@@ -121,10 +121,7 @@ export async function confirmDeleteIssue() {
     const result = await response.json();
 
     // Show success message
-    const statusDiv = document.getElementById('status-message');
-    statusDiv.className = 'status-success mt-20 p-15 rounded';
-    statusDiv.textContent = `✓ ${result.message}`;
-    statusDiv.style.display = 'block';
+    UIUtils.showStatus('status-message', result.message, 'success');
 
     // Close modal
     closeDeleteModal();
@@ -133,13 +130,13 @@ export async function confirmDeleteIssue() {
     setTimeout(() => {
       if (isLastIssue) {
         // If this was the last issue, go back to library
-        statusDiv.textContent = '✓ Last issue deleted. Returning to library...';
+        UIUtils.showStatus('status-message', 'Last issue deleted. Returning to library...', 'success');
         setTimeout(() => {
           window.location.href = '/#library';
         }, 1000);
       } else {
         // Reload to show updated issue list
-        statusDiv.textContent = '✓ Issue deleted. Refreshing...';
+        UIUtils.showStatus('status-message', 'Issue deleted. Refreshing...', 'success');
         setTimeout(() => {
           location.reload();
         }, 1000);
@@ -147,11 +144,8 @@ export async function confirmDeleteIssue() {
     }, 1500);
   } catch (error) {
     console.error('[Periodical] Error deleting issue:', error);
-    const statusDiv = document.getElementById('status-message');
-    statusDiv.className = 'status-error mt-20 p-15 rounded';
     const message = error.toUserMessage ? error.toUserMessage() : error.message;
-    statusDiv.textContent = `✗ Error: ${message}`;
-    statusDiv.style.display = 'block';
+    UIUtils.showStatus('status-message', `Error: ${message}`, 'error');
   }
 }
 
@@ -332,10 +326,7 @@ export async function confirmMoveIssue() {
     const result = await response.json();
 
     // Show success message
-    const statusDiv = document.getElementById('status-message');
-    statusDiv.className = 'status-success mt-20 p-15 rounded';
-    statusDiv.textContent = `✓ ${result.message}`;
-    statusDiv.style.display = 'block';
+    UIUtils.showStatus('status-message', result.message, 'success');
 
     // Close modals
     closeMoveIssueModal();
@@ -343,7 +334,7 @@ export async function confirmMoveIssue() {
 
     // If this was the last issue, redirect to library instead of reloading
     if (isLastIssue) {
-      statusDiv.textContent = '✓ Last issue moved. Returning to library...';
+      UIUtils.showStatus('status-message', 'Last issue moved. Returning to library...', 'success');
       setTimeout(() => {
         window.location.href = '/#library';
       }, 1500);
@@ -393,10 +384,7 @@ export async function toggleSpecialEdition() {
     const result = await response.json();
 
     // Show success message
-    const statusDiv = document.getElementById('status-message');
-    statusDiv.className = 'status-success mt-20 p-15 rounded';
-    statusDiv.textContent = `✓ ${result.message}`;
-    statusDiv.style.display = 'block';
+    UIUtils.showStatus('status-message', result.message, 'success');
 
     // Close modal
     closeMetadataModal();

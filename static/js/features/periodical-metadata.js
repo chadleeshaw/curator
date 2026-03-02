@@ -9,6 +9,7 @@ import { APIClient, APIHelper } from '../core/api.js';
 import { CSS_CLASSES } from '../core/constants.js';
 import { getSpecialEditionValue, isSpecialEdition } from './periodical-rendering.js';
 import { escapeHtml } from '../readers/reader-utils.js';
+import { UIUtils } from '../core/ui-utils.js';
 
 // Module-level references to shared state (set via init)
 let _state = null;
@@ -22,44 +23,6 @@ export function initMetadata(state) {
   _state = state;
 }
 
-// ---------------------------------------------------------------------------
-// Notifications
-// ---------------------------------------------------------------------------
-
-/**
- * Show a transient notification banner.
- * @param {string} message
- * @param {'success'|'info'|'error'} type
- */
-export function showNotification(message, type) {
-  const notification = document.createElement('div');
-  notification.textContent = message;
-  notification.style.position = 'fixed';
-  notification.style.top = '20px';
-  notification.style.right = '20px';
-  notification.style.padding = '15px 20px';
-  notification.style.borderRadius = '5px';
-  notification.style.zIndex = '10000';
-  notification.style.fontWeight = '600';
-  notification.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-
-  if (type === 'success') {
-    notification.style.background = '#10b981';
-    notification.style.color = 'white';
-  } else if (type === 'info') {
-    notification.style.background = '#8b5cf6';
-    notification.style.color = 'white';
-  } else {
-    notification.style.background = '#ef4444';
-    notification.style.color = 'white';
-  }
-
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.remove();
-  }, 3000);
-}
 
 // ---------------------------------------------------------------------------
 // Metadata modal – view
@@ -80,7 +43,7 @@ export async function viewMetadata(periodicalId) {
   } catch (error) {
     console.error('[Periodical] Error fetching metadata:', error);
     const message = error.toUserMessage ? error.toUserMessage() : 'Failed to load metadata';
-    showNotification(message, 'error');
+    UIUtils.showToast(message, 'error');
   }
 }
 
@@ -100,13 +63,13 @@ export function displayMetadata(data) {
   const isSpecial = isSpecialEdition(data);
   const toggleBtn = document.getElementById('toggle-special-btn');
   if (toggleBtn) {
-    const starSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+    const diamondSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 22 12 12 22 2 12"/></svg>';
     if (isSpecial) {
-      toggleBtn.innerHTML = `${starSvg} Unmark Special Edition`;
+      toggleBtn.innerHTML = `${diamondSvg} Unmark Special Edition`;
       toggleBtn.title = 'Remove special edition status';
     } else {
-      toggleBtn.innerHTML = `${starSvg} Mark as Special Edition`;
+      toggleBtn.innerHTML = `${diamondSvg} Mark as Special Edition`;
       toggleBtn.title = 'Mark this issue as a special edition';
     }
   }
@@ -495,7 +458,7 @@ export function clearCoverUpload() {
 export async function regenerateThumbnailOcr() {
   if (!_state.currentPeriodicalId) return;
 
-  showNotification('Regenerating thumbnail and queuing OCR...', 'info');
+  UIUtils.showToast('Regenerating thumbnail and queuing OCR...', 'info');
 
   try {
     const data = await APIHelper.executeWithErrorHandling(async () => {
@@ -506,7 +469,7 @@ export async function regenerateThumbnailOcr() {
     }, 'Periodical');
 
     if (data.skipped) {
-      showNotification(data.message, 'info');
+      UIUtils.showToast(data.message, 'info');
       return;
     }
 
@@ -514,7 +477,7 @@ export async function regenerateThumbnailOcr() {
       ? 'OCR job queued — metadata will update when processing completes.'
       : data.ocr_message || 'OCR was not queued.';
 
-    showNotification(`Thumbnail regenerated. ${ocrNote}`, 'success');
+    UIUtils.showToast(`Thumbnail regenerated. ${ocrNote}`, 'success');
 
     // Refresh the metadata modal and page to show updated cover
     await viewMetadata(_state.currentPeriodicalId);
@@ -524,7 +487,7 @@ export async function regenerateThumbnailOcr() {
     const message = error.toUserMessage
       ? error.toUserMessage()
       : 'Failed to regenerate thumbnail. You can upload a cover manually via Edit Metadata.';
-    showNotification(message, 'error');
+    UIUtils.showToast(message, 'error');
   }
 }
 
@@ -542,7 +505,7 @@ async function uploadCoverImage(periodicalId) {
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
 
-  showNotification('Uploading cover image...', 'info');
+  UIUtils.showToast('Uploading cover image...', 'info');
 
   const response = await APIClient.authenticatedFetch(
     `/api/periodicals/${periodicalId}/upload-cover`,
@@ -610,7 +573,7 @@ export async function saveMetadataEdit() {
     if (hasCustomCover) {
       await uploadCoverImage(_state.currentPeriodicalId);
     } else if (shouldRegenerateCover) {
-      showNotification('Regenerating cover from page ' + coverPage, 'info');
+      UIUtils.showToast('Regenerating cover from page ' + coverPage, 'info');
       await APIHelper.executeWithErrorHandling(async () => {
         await APIClient.post(`/api/periodicals/${_state.currentPeriodicalId}/regenerate-cover`, {
           page_number: parseInt(coverPage),
@@ -624,14 +587,14 @@ export async function saveMetadataEdit() {
     clearCoverUpload();
 
     // Show success message
-    showNotification('Metadata updated successfully', 'success');
+    UIUtils.showToast('Metadata updated successfully', 'success');
 
     // Refresh the page to show updated data
     setTimeout(() => window.location.reload(), 1000);
   } catch (error) {
     console.error('[Periodical] Error updating metadata:', error);
     const message = error.toUserMessage ? error.toUserMessage() : 'Failed to update metadata';
-    showNotification('Error: ' + message, 'error');
+    UIUtils.showToast('Error: ' + message, 'error');
   }
 }
 

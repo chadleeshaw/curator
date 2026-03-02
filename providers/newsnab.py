@@ -747,9 +747,10 @@ class NewsnabProvider(SearchProvider):
                 server_info = {}
                 if server_elem is not None:
                     server_info = {
-                        "title": server_elem.get("title", "Unknown"),
-                        "version": server_elem.get("version", "Unknown"),
+                        "title": server_elem.get("title"),
+                        "version": server_elem.get("version"),
                     }
+                    server_info = {k: v for k, v in server_info.items() if v}
 
                 return {
                     "success": True,

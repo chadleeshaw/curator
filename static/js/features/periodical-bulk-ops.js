@@ -6,7 +6,7 @@
 
 import { APIClient, APIHelper } from '../core/api.js';
 import { CSS_CLASSES, API_LIMITS } from '../core/constants.js';
-import { showNotification } from './periodical-metadata.js';
+import { UIUtils } from '../core/ui-utils.js';
 
 // Module-level references to shared state (set via init)
 let _state = null;
@@ -138,7 +138,7 @@ export function getSelectedIds() {
 export async function openBulkMoveModal() {
   const ids = getSelectedIds();
   if (ids.length === 0) {
-    showNotification('No issues selected', 'error');
+    UIUtils.showToast('No issues selected', 'error');
     return;
   }
 
@@ -181,7 +181,7 @@ export async function openBulkMoveModal() {
   } catch (error) {
     console.error('[Periodical] Error loading tracking records for bulk move:', error);
     const message = error.toUserMessage ? error.toUserMessage() : 'Failed to load tracking options';
-    showNotification(message, 'error');
+    UIUtils.showToast(message, 'error');
     closeBulkMoveModal();
   }
 }
@@ -202,7 +202,7 @@ export async function confirmBulkMove() {
   const ids = getSelectedIds();
 
   if (!targetTrackingId || ids.length === 0) {
-    showNotification('Please select a tracking record', 'error');
+    UIUtils.showToast('Please select a tracking record', 'error');
     return;
   }
 
@@ -223,16 +223,13 @@ export async function confirmBulkMove() {
 
     const result = await response.json();
 
-    const statusDiv = document.getElementById('status-message');
-    statusDiv.className = 'status-success mt-20 p-15 rounded';
-    statusDiv.textContent = `✓ ${result.message}`;
-    statusDiv.style.display = 'block';
+    UIUtils.showStatus('status-message', result.message, 'success');
 
     closeBulkMoveModal();
     toggleBulkSelectMode();
 
     if (isMovingAll) {
-      statusDiv.textContent = '✓ All issues moved. Returning to library...';
+      UIUtils.showStatus('status-message', 'All issues moved. Returning to library...', 'success');
       setTimeout(() => {
         window.location.href = '/#library';
       }, 1500);
@@ -244,7 +241,7 @@ export async function confirmBulkMove() {
   } catch (error) {
     console.error('[Periodical] Error in bulk move:', error);
     const message = error.toUserMessage ? error.toUserMessage() : error.message;
-    showNotification('Failed to move issues: ' + message, 'error');
+    UIUtils.showToast('Failed to move issues: ' + message, 'error');
     confirmBtn.disabled = false;
     confirmBtn.textContent = 'Move Issues';
   }
@@ -260,7 +257,7 @@ export async function confirmBulkMove() {
 export function openBulkRegenerateModal() {
   const ids = getSelectedIds();
   if (ids.length === 0) {
-    showNotification('No issues selected', 'error');
+    UIUtils.showToast('No issues selected', 'error');
     return;
   }
 
@@ -299,7 +296,7 @@ export async function confirmBulkRegenerate() {
 
     const result = await response.json();
 
-    showNotification(`✅ ${result.message}`, 'success');
+    UIUtils.showToast(`✅ ${result.message}`, 'success');
 
     closeBulkRegenerateModal();
     toggleBulkSelectMode();
@@ -310,7 +307,7 @@ export async function confirmBulkRegenerate() {
   } catch (error) {
     console.error('[Periodical] Error in bulk regenerate:', error);
     const message = error.toUserMessage ? error.toUserMessage() : error.message;
-    showNotification('Failed to regenerate: ' + message, 'error');
+    UIUtils.showToast('Failed to regenerate: ' + message, 'error');
     confirmBtn.disabled = false;
     confirmBtn.textContent = 'Regenerate';
   }
@@ -326,7 +323,7 @@ export async function confirmBulkRegenerate() {
 export function openBulkDeleteModal() {
   const ids = getSelectedIds();
   if (ids.length === 0) {
-    showNotification('No issues selected', 'error');
+    UIUtils.showToast('No issues selected', 'error');
     return;
   }
 
@@ -378,16 +375,13 @@ export async function confirmBulkDelete() {
 
     const result = await response.json();
 
-    const statusDiv = document.getElementById('status-message');
-    statusDiv.className = 'status-success mt-20 p-15 rounded';
-    statusDiv.textContent = `✓ ${result.message}`;
-    statusDiv.style.display = 'block';
+    UIUtils.showStatus('status-message', result.message, 'success');
 
     closeBulkDeleteModal();
     toggleBulkSelectMode();
 
     if (isDeletingAll) {
-      statusDiv.textContent = '✓ All issues deleted. Returning to library...';
+      UIUtils.showStatus('status-message', 'All issues deleted. Returning to library...', 'success');
       setTimeout(() => {
         window.location.href = '/#library';
       }, 1500);
@@ -399,7 +393,7 @@ export async function confirmBulkDelete() {
   } catch (error) {
     console.error('[Periodical] Error in bulk delete:', error);
     const message = error.toUserMessage ? error.toUserMessage() : error.message;
-    showNotification('Failed to delete issues: ' + message, 'error');
+    UIUtils.showToast('Failed to delete issues: ' + message, 'error');
     if (confirmBtn) {
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Delete Issues';

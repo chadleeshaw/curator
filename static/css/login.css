@@ -58,6 +58,7 @@ body {
   color: var(--text-primary);
   font-weight: 500;
   font-size: 14px;
+  text-align: left;
 }
 
 .form-group input {

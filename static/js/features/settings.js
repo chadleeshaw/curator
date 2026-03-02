@@ -1109,7 +1109,7 @@ export class SettingsManager {
         // Newsnab/RSS provider - requires URL and key
         const url = document.getElementById(`search-provider-url-${index}`).value;
         const keyInput = document.getElementById(`search-provider-key-${index}`);
-        const key = keyInput ? keyInput.value || keyInput.dataset.originalKey : '';
+        const key = keyInput ? keyInput.value || _credentialStore.get(`search-provider-key-${index}`) || '' : '';
 
         if (!url) {
           UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
@@ -1138,9 +1138,10 @@ export class SettingsManager {
       );
 
       if (data.success) {
-        const serverInfo = data.server_info
-          ? ` (${data.server_info.title || 'Unknown'} v${data.server_info.version || 'Unknown'})`
-          : '';
+        const parts = [];
+        if (data.server_info?.title) parts.push(data.server_info.title);
+        if (data.server_info?.version) parts.push(`v${data.server_info.version}`);
+        const serverInfo = parts.length ? ` (${parts.join(' ')})` : '';
         UIUtils.showStatus('settings-status', `Connection successful!${serverInfo}`, 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
       } else {

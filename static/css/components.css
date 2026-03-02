@@ -1570,6 +1570,74 @@
 }
 
 /* ==========================================================================
+   Status Toast Notifications
+   Replaces inline status divs — anchored to top-right near breadcrumb,
+   or top-right within an open modal.
+   ========================================================================== */
+
+.status-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  min-width: 250px;
+  max-width: 400px;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transform: translateX(400px);
+  transition: none;
+  pointer-events: auto;
+}
+
+/* Entrance — triggered by adding this class on next animation frame */
+.status-toast-visible {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+/* Exit — triggered on dismiss */
+.status-toast-exit {
+  animation: slide-out-right 0.3s ease-out forwards;
+}
+
+/* Modal variant — absolute within modal-content */
+.status-toast-modal {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+}
+
+/* Type variants — match existing status color palette */
+.status-toast-success {
+  background: var(--success-100);
+  color: var(--success-700);
+  border-color: var(--success-500);
+}
+
+.status-toast-error {
+  background: var(--error-100);
+  color: var(--error-700);
+  border-color: var(--error-500);
+}
+
+.status-toast-warning {
+  background: var(--warning-100);
+  color: var(--warning-700);
+  border-color: var(--warning-500);
+}
+
+.status-toast-info {
+  background: var(--info-100);
+  color: var(--info-700);
+  border-color: var(--info-500);
+}
+
+/* ==========================================================================
    Issue Cards (Added for JS Refactoring - Phase 1)
    ========================================================================== */
 

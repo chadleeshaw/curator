@@ -234,9 +234,10 @@ export class UIUtils {
   }
 
   /**
-   * Display a status message to the user
+   * Display a status message as a toast notification anchored to the
+   * breadcrumb bar (right side) or top-right of an open modal.
    *
-   * @param {string} elementId - The ID of the status element to update
+   * @param {string} _elementId - Legacy parameter (ignored — kept for backward compatibility)
    * @param {string} message - The message to display
    * @param {'success'|'error'|'warning'|'info'} [type='success'] - The type of status message
    * @returns {void}
@@ -245,43 +246,115 @@ export class UIUtils {
    * UIUtils.showStatus('tracking-status', 'Saved successfully', 'success');
    * UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
    */
-  static showStatus(elementId, message, type = 'success') {
-    const statusDiv = document.getElementById(elementId);
-    if (!statusDiv) return;
-
-    statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
-
-    // Apply base status message class and type-specific class
-    statusDiv.className = CSS_CLASSES.STATUS_MESSAGE;
-
+  static showStatus(_elementId, message, type = 'success') {
     const statusConfig = {
-      success: { className: CSS_CLASSES.STATUS_SUCCESS, icon: '\u2713' },
-      error: { className: CSS_CLASSES.STATUS_ERROR, icon: '\u2717' },
-      warning: { className: CSS_CLASSES.STATUS_WARNING, icon: '' },
-      info: { className: CSS_CLASSES.STATUS_INFO, icon: '\u2139' },
+      success: { icon: '✓', cssClass: 'status-toast-success' },
+      error:   { icon: '✗', cssClass: 'status-toast-error' },
+      warning: { icon: '',       cssClass: 'status-toast-warning' },
+      info:    { icon: 'ℹ', cssClass: 'status-toast-info' },
     };
-
     const config = statusConfig[type] ?? statusConfig.info;
-    statusDiv.classList.add(config.className);
-    statusDiv.textContent = config.icon ? `${config.icon} ${message}` : message;
+    const text = config.icon ? `${config.icon} ${message}` : message;
 
-    // Scroll to the status message so it's visible
-    statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // If a toast is still visible and hasn't met the minimum display time,
+    // delay showing the replacement so the user can read the first message.
+    const MIN_DISPLAY_MS = 800;
+    const elapsed = UIUtils._toastShownAt ? Date.now() - UIUtils._toastShownAt : MIN_DISPLAY_MS;
+    if (UIUtils._activeStatusToast && elapsed < MIN_DISPLAY_MS) {
+      clearTimeout(UIUtils._pendingToastTimer);
+      UIUtils._pendingToastTimer = setTimeout(() => {
+        UIUtils._showToastNow(text, config);
+      }, MIN_DISPLAY_MS - elapsed);
+      return;
+    }
+
+    clearTimeout(UIUtils._pendingToastTimer);
+    UIUtils._showToastNow(text, config);
   }
 
   /**
-   * Hide a status message
+   * Internal: create and display the toast element immediately.
+   * @param {string} text - Formatted message text with icon
+   * @param {{icon: string, cssClass: string}} config - Toast config
+   * @private
+   */
+  static _showToastNow(text, config) {
+    // Dismiss any existing status toast before showing a new one
+    UIUtils._dismissStatusToast(false);
+
+    // Determine context: inside a modal or page-level
+    const visibleModal = document.querySelector('.modal:not(.hidden)');
+    const modalContent = visibleModal?.querySelector('.modal-content');
+
+    // Build the toast element
+    const toast = document.createElement('div');
+    toast.className = `status-toast ${config.cssClass}`;
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.textContent = text;
+
+    // Click to dismiss
+    toast.addEventListener('click', () => UIUtils._dismissStatusToast(true));
+
+    if (modalContent) {
+      // Inside a modal — position absolute within the modal-content
+      if (!modalContent.style.position || modalContent.style.position === 'static') {
+        modalContent.style.position = 'relative';
+      }
+      toast.classList.add('status-toast-modal');
+      modalContent.appendChild(toast);
+    } else {
+      // Page-level — append to body, CSS handles breadcrumb-aware positioning
+      document.body.appendChild(toast);
+    }
+
+    // Store reference and timestamp for hideStatus / auto-dismiss / min-display
+    UIUtils._activeStatusToast = toast;
+    UIUtils._toastShownAt = Date.now();
+
+    // Trigger entrance animation on next frame
+    requestAnimationFrame(() => toast.classList.add('status-toast-visible'));
+  }
+
+  /**
+   * Hide the active status notification.
    *
-   * @param {string} elementId - The ID of the status element to hide
+   * @param {string} [_elementId] - Legacy parameter (ignored — kept for backward compatibility)
    * @returns {void}
    *
    * @example
    * UIUtils.hideStatus('tracking-status');
    */
-  static hideStatus(elementId) {
-    const statusDiv = document.getElementById(elementId);
-    statusDiv?.classList.add(CSS_CLASSES.HIDDEN);
+  static hideStatus(_elementId) {
+    clearTimeout(UIUtils._pendingToastTimer);
+    UIUtils._dismissStatusToast(true);
   }
+
+  /**
+   * Internal: dismiss the active status toast.
+   * @param {boolean} animate - Whether to play the exit animation
+   * @private
+   */
+  static _dismissStatusToast(animate) {
+    const toast = UIUtils._activeStatusToast;
+    if (!toast) return;
+    UIUtils._activeStatusToast = null;
+    UIUtils._toastShownAt = null;
+
+    if (animate && toast.parentElement) {
+      toast.classList.add('status-toast-exit');
+      toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    } else {
+      toast.remove();
+    }
+  }
+
+  /** @private */
+  static _activeStatusToast = null;
+  /** @private */
+  static _toastShownAt = null;
+  /** @private */
+  static _pendingToastTimer = null;
 
   /**
    * Convert a string to title case (capitalize first letter of each word)

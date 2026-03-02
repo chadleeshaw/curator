@@ -6,6 +6,7 @@
  */
 
 import { initScrollCollapse } from './core/scroll-collapse.js';
+import { UIUtils } from './core/ui-utils.js';
 
 // Feature modules
 import {
@@ -286,18 +287,9 @@ document.addEventListener('DOMContentLoaded', () => {
       message.style.padding = '40px';
       message.style.color = 'var(--text-secondary)';
       message.innerHTML = `<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← ${window._stackReturnUrl ? 'Back to Stack' : 'Back to Library'}</button></p>`;
-      const statusDiv = document.getElementById('status-message');
-      if (statusDiv && statusDiv.style.display === 'none') {
-        // Show helpful message if not already showing deletion success
-      }
     }
   } catch (error) {
     console.error('Error rendering issues:', error);
-    const errorDiv = document.getElementById('status-message');
-    if (errorDiv) {
-      errorDiv.className = 'status-error mt-20 p-15 rounded';
-      errorDiv.textContent = `Error loading issues: ${error.message}`;
-      errorDiv.style.display = 'block';
-    }
+    UIUtils.showStatus('status-message', `Error loading issues: ${error.message}`, 'error');
   }
 });

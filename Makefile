@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-perf test-perf-api test-perf-ocr test-perf-ocr-accuracy test-perf-load install install-hooks run clean ci-lint screenshots screenshot-library
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-playwright test-perf test-perf-api test-perf-ocr test-perf-ocr-accuracy test-perf-load install install-hooks run clean ci-lint screenshots screenshot-library
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -37,6 +37,7 @@ help:
 	@echo "  make test-routers     Run router/API tests only"
 	@echo "  make test-coverage    Run tests with coverage report"
 	@echo "  make test-quick       Quick syntax check of test files"
+	@echo "  make test-playwright  Run Playwright browser tests (requires running app)"
 	@echo ""
 	@echo "Performance Testing:"
 	@echo "  make test-perf             Run all performance tests (API + OCR)"
@@ -143,6 +144,10 @@ test-routers:
 	@.venv/bin/python -m pytest tests/unit/web/routers/ -v --tb=short
 	@echo "✅ Router tests completed!"
 
+test-playwright:
+	@echo "🎭 Running Playwright browser tests (app must be running)..."
+	CURATOR_TEST_USER=$${CURATOR_TEST_USER:-admin} CURATOR_TEST_PASSWORD=$${CURATOR_TEST_PASSWORD:-adminadmin} npx playwright test
+	@echo "✅ Playwright tests completed!"
 test-coverage:
 	@echo "🧪 Running tests with coverage (excluding performance tests)..."
 	@.venv/bin/python -m pytest tests/ --cov=. --cov-report=term-missing --cov-report=html -m "not slow"
