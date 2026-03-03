@@ -137,6 +137,7 @@ class DatabaseManager:
         session = self.session_factory()
         try:
             yield session
+            session.commit()
         except Exception:
             session.rollback()
             raise

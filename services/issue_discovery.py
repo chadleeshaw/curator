@@ -164,6 +164,7 @@ class IssueDiscoveryService:
                         provider,
                         search_result,
                         now,
+                        session,
                     )
                     session.add(new_issue)
                     stats["new"] += 1
@@ -183,6 +184,13 @@ class IssueDiscoveryService:
 
         return stats
 
+    @staticmethod
+    def _ensure_utc(dt: datetime) -> datetime:
+        """Normalise a datetime to a timezone-aware UTC datetime."""
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
     def _parse_pubdate(self, pubdate_str) -> Optional[datetime]:
         """Parse a pubdate string or datetime to a UTC-aware datetime, or return None."""
         if not pubdate_str:
@@ -190,19 +198,11 @@ class IssueDiscoveryService:
         try:
             if isinstance(pubdate_str, str):
                 pubdate = datetime.fromisoformat(pubdate_str.rstrip("Z"))
-                if pubdate.tzinfo is None:
-                    pubdate = pubdate.replace(tzinfo=timezone.utc)
-                else:
-                    pubdate = pubdate.astimezone(timezone.utc)
             elif isinstance(pubdate_str, datetime):
                 pubdate = pubdate_str
-                if pubdate.tzinfo is None:
-                    pubdate = pubdate.replace(tzinfo=timezone.utc)
-                else:
-                    pubdate = pubdate.astimezone(timezone.utc)
             else:
                 return None
-            return pubdate
+            return self._ensure_utc(pubdate)
         except (ValueError, AttributeError) as parse_error:
             logger.warning(f"Failed to parse pubdate '{pubdate_str}': {parse_error}")
             return None
@@ -272,11 +272,17 @@ class IssueDiscoveryService:
         provider: str,
         result: Dict[str, Any],
         now,
+        session: Session,
     ) -> DiscoveredIssue:
         """Build a new DiscoveredIssue from a parsed search result."""
         search_result_id = result.get("search_result_id")
+        # Get the user_id from the tracking record
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+        if not tracking:
+            raise ValueError(f"Tracking ID {tracking_id} not found")
+
         return DiscoveredIssue(
-            user_id=1,
+            user_id=tracking.user_id,
             tracking_id=tracking_id,
             title=title,
             normalized_title=parsed.cleaned_title.lower(),
@@ -651,14 +657,18 @@ class IssueDiscoveryService:
         Returns:
             True if issue matches tracking criteria, False otherwise
         """
-        issue_country = self._normalize_country(issue.country or "US")
-        tracking_country = self._normalize_country(tracking.country or "US")
-
-        if issue_country != tracking_country:
-            logger.debug(
-                f"Skipping '{issue.title}': Country mismatch " f"(issue: {issue_country}, tracking: {tracking_country})"
-            )
-            return False
+        # Only filter by country when both the issue and the tracking record have an
+        # explicit country set. If either is unset we cannot make a meaningful comparison
+        # and should not reject the issue.
+        if issue.country and tracking.country:
+            issue_country = self._normalize_country(issue.country)
+            tracking_country = self._normalize_country(tracking.country)
+            if issue_country != tracking_country:
+                logger.debug(
+                    f"Skipping '{issue.title}': Country mismatch "
+                    f"(issue: {issue_country}, tracking: {tracking_country})"
+                )
+                return False
 
         if tracking.track_all_editions:
             return True

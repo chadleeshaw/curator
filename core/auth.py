@@ -3,6 +3,7 @@ Authentication module for managing login credentials
 """
 
 from datetime import timedelta
+from hmac import compare_digest
 from typing import Optional, Tuple
 
 import jwt
@@ -255,10 +256,15 @@ class AuthManager:
             Tuple of (is_valid, username) where username is None if token is invalid
         """
         with get_db_session(self.session_factory) as session:
-            creds = session.query(Credentials).filter_by(api_token=token).first()
+            creds = session.query(Credentials).first()
             if not creds:
                 return False, None
-            return True, creds.username
+
+            # Use constant-time comparison to prevent timing attacks.
+            # Guard against None api_token (user has never generated a token).
+            if creds.api_token and compare_digest(creds.api_token, token):
+                return True, creds.username
+            return False, None
 
     # ------------------------------------------------------------------
     # Multi-user management

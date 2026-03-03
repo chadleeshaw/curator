@@ -124,7 +124,9 @@ def configure_logging(level: str = "INFO", log_file: Optional[str] = None) -> No
     # Optionally write to a file.
     if log_file:
         try:
-            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            log_dir = os.path.dirname(log_file)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
             file_handler = logging.FileHandler(log_file, encoding="utf-8")
             file_handler.setFormatter(formatter)
             root.addHandler(file_handler)

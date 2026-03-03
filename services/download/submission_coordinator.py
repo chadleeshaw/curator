@@ -449,12 +449,15 @@ class SubmissionCoordinator:
         """
         Validate discovered issue for download submission.
 
+        This method validates but does not mutate the database state.
+        Mutation is handled by the calling method via dedicated helpers.
+
         Args:
             issue: DiscoveredIssue record
             session: Database session
 
         Returns:
-            Error message if validation fails, None if valid
+            Error code string if validation fails, None if valid
         """
         if not issue:
             return "DiscoveredIssue not found"
@@ -483,21 +486,55 @@ class SubmissionCoordinator:
         # Check blacklisted file types
         if self._has_blacklisted_extension(issue.title):
             logger.warning(f"Skipping discovered issue with blacklisted extension: {issue.title}")
-            issue.download_status = DownloadStatus.PERMANENTLY_FAILED
-            issue.last_error = "Blacklisted file extension"
-            session.commit()
             return "blacklisted_extension"
 
         # Validate we have the necessary metadata
         if not issue.latest_url:
             logger.error(f"DiscoveredIssue missing URL: {issue.title}")
-            # Mark as failed
-            issue.download_status = DownloadStatus.FAILED
-            issue.last_error = "Missing URL"
-            session.commit()
             return "missing_url"
 
         return None
+
+    def _handle_blacklisted_extension(self, issue, session: Session) -> None:
+        """Mark a discovered issue as permanently failed due to a blacklisted file extension."""
+        issue.download_status = DownloadStatus.PERMANENTLY_FAILED
+        issue.last_error = "Blacklisted file extension"
+        session.commit()
+
+    def _handle_missing_url(self, issue, session: Session) -> None:
+        """Mark a discovered issue as failed due to a missing download URL."""
+        issue.download_status = DownloadStatus.FAILED
+        issue.last_error = "Missing URL"
+        session.commit()
+
+    def _find_discovered_issue(
+        self, tracking_id: int, title: str, url: str, provider: str, session: Session
+    ) -> Optional[DiscoveredIssue]:
+        """
+        Parse a search result title and look up the matching DiscoveredIssue by fuzzy group.
+
+        Args:
+            tracking_id: Periodical tracking ID
+            title: Search result title
+            url: Search result URL
+            provider: Search result provider
+            session: Database session
+
+        Returns:
+            Matching DiscoveredIssue or None if not found
+        """
+        parsed = self.parser.parse_search_result(title=title, url=url, provider=provider)
+        if not parsed:
+            return None
+        fuzzy_group = get_fuzzy_group_id(parsed.original_title)
+        return (
+            session.query(DiscoveredIssue)
+            .filter(
+                DiscoveredIssue.tracking_id == tracking_id,
+                DiscoveredIssue.fuzzy_match_group == fuzzy_group,
+            )
+            .first()
+        )
 
     def _submit_issue_to_client(
         self, issue, search_result: Dict[str, Any], session: Session
@@ -597,7 +634,11 @@ class SubmissionCoordinator:
         # Validate the issue
         error = self._validate_discovered_issue(issue, session)
         if error:
-            if error not in ["already_downloading", "permanently_failed"]:
+            if error == "blacklisted_extension":
+                self._handle_blacklisted_extension(issue, session)
+            elif error == "missing_url":
+                self._handle_missing_url(issue, session)
+            elif error not in ["already_downloading", "permanently_failed"]:
                 logger.error(f"DiscoveredIssue validation failed: {error} (id: {discovered_issue_id})")
             return None
 
@@ -722,8 +763,12 @@ class SubmissionCoordinator:
 
             if not discovered_issue:
                 now = utc_now()
+                tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+                if not tracking:
+                    raise ValueError(f"Tracking ID {tracking_id} not found")
+
                 discovered_issue = DiscoveredIssue(
-                    user_id=1,
+                    user_id=tracking.user_id,
                     tracking_id=tracking_id,
                     title=title,
                     normalized_title=parsed.cleaned_title.lower(),
@@ -765,6 +810,7 @@ class SubmissionCoordinator:
             )
 
         except Exception as e:
+            session.rollback()
             logger.warning(
                 f"[DownloadManager] Could not link manual submission {submission.id} to DiscoveredIssue: {e}",
                 exc_info=True,
@@ -808,23 +854,13 @@ class SubmissionCoordinator:
         # Find the discovered issue by fuzzy_match_group (same approach as issue_discovery)
         # NOTE: Don't match by exact title — record_search_results may have found an
         # existing DiscoveredIssue whose stored title differs from this search result title
-        parsed = self.parser.parse_search_result(
-            title=title,
-            url=search_result.get("url", ""),
-            provider=search_result.get("provider", ""),
+        discovered_issue = self._find_discovered_issue(
+            tracking_id,
+            title,
+            search_result.get("url", ""),
+            search_result.get("provider", ""),
+            session,
         )
-
-        discovered_issue = None
-        if parsed:
-            fuzzy_group = get_fuzzy_group_id(parsed.original_title)
-            discovered_issue = (
-                session.query(DiscoveredIssue)
-                .filter(
-                    DiscoveredIssue.tracking_id == tracking_id,
-                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
-                )
-                .first()
-            )
 
         if not discovered_issue:
             logger.error(f"Could not find DiscoveredIssue after recording: {title}")
@@ -985,23 +1021,13 @@ class SubmissionCoordinator:
             return None
 
         # Find the discovered issue by fuzzy_match_group
-        parsed = self.parser.parse_search_result(
-            title=title,
-            url=search_result.get("url", ""),
-            provider=search_result.get("provider", ""),
+        discovered_issue = self._find_discovered_issue(
+            tracking_id,
+            title,
+            search_result.get("url", ""),
+            search_result.get("provider", ""),
+            session,
         )
-
-        discovered_issue = None
-        if parsed:
-            fuzzy_group = get_fuzzy_group_id(parsed.original_title)
-            discovered_issue = (
-                session.query(DiscoveredIssue)
-                .filter(
-                    DiscoveredIssue.tracking_id == tracking_id,
-                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
-                )
-                .first()
-            )
 
         if not discovered_issue:
             logger.error(f"Could not find DiscoveredIssue after recording for batch: {title}")

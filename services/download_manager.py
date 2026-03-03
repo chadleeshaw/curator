@@ -727,6 +727,8 @@ class DownloadManager:
         """
         Validate discovered issue for download submission.
 
+        This method validates but does not mutate the database state. Mutation is handled by calling methods.
+
         Args:
             issue: DiscoveredIssue record
             session: Database session
@@ -761,21 +763,26 @@ class DownloadManager:
         # Check blacklisted file types
         if self._has_blacklisted_extension(issue.title):
             logger.warning(f"Skipping discovered issue with blacklisted extension: {issue.title}")
-            issue.download_status = DownloadStatus.PERMANENTLY_FAILED
-            issue.last_error = "Blacklisted file extension"
-            session.commit()
             return "blacklisted_extension"
 
         # Validate we have the necessary metadata
         if not issue.latest_url:
             logger.error(f"DiscoveredIssue missing URL: {issue.title}")
-            # Mark as failed
-            issue.download_status = DownloadStatus.FAILED
-            issue.last_error = "Missing URL"
-            session.commit()
             return "missing_url"
 
         return None
+
+    def _handle_blacklisted_extension(self, issue, session: Session) -> None:
+        """Handle discovered issue with blacklisted extension"""
+        issue.download_status = DownloadStatus.PERMANENTLY_FAILED
+        issue.last_error = "Blacklisted file extension"
+        session.commit()
+
+    def _handle_missing_url(self, issue, session: Session) -> None:
+        """Handle discovered issue with missing URL"""
+        issue.download_status = DownloadStatus.FAILED
+        issue.last_error = "Missing URL"
+        session.commit()
 
     def _build_search_result_from_issue(self, issue, discovered_issue_id: int) -> Dict[str, Any]:
         """
@@ -796,6 +803,35 @@ class DownloadManager:
             "guid": str(discovered_issue_id),
             "raw_metadata": issue.extra_metadata or {},
         }
+
+    def _find_discovered_issue(
+        self, tracking_id: int, title: str, url: str, provider: str, session: Session
+    ) -> Optional[DiscoveredIssue]:
+        """
+        Parse a search result title and look up the matching DiscoveredIssue by fuzzy group.
+
+        Args:
+            tracking_id: Periodical tracking ID
+            title: Search result title
+            url: Search result URL
+            provider: Search result provider
+            session: Database session
+
+        Returns:
+            Matching DiscoveredIssue or None if not found
+        """
+        parsed = self.parser.parse_search_result(title=title, url=url, provider=provider)
+        if not parsed:
+            return None
+        fuzzy_group = get_fuzzy_group_id(parsed.original_title)
+        return (
+            session.query(DiscoveredIssue)
+            .filter(
+                DiscoveredIssue.tracking_id == tracking_id,
+                DiscoveredIssue.fuzzy_match_group == fuzzy_group,
+            )
+            .first()
+        )
 
     def _record_attempt(self, issue) -> None:
         """Increment attempt counter and record the attempt timestamp."""
@@ -941,7 +977,11 @@ class DownloadManager:
         # Validate the issue
         error = self._validate_discovered_issue(issue, session)
         if error:
-            if error not in ["already_downloading", "permanently_failed"]:
+            if error == "blacklisted_extension":
+                self._handle_blacklisted_extension(issue, session)
+            elif error == "missing_url":
+                self._handle_missing_url(issue, session)
+            elif error not in ["already_downloading", "permanently_failed"]:
                 logger.error(f"DiscoveredIssue validation failed: {error} (id: {discovered_issue_id})")
             return None
 
@@ -1084,23 +1124,13 @@ class DownloadManager:
         # Find the discovered issue by fuzzy_match_group (same approach as issue_discovery)
         # NOTE: Don't match by exact title — record_search_results may have found an
         # existing DiscoveredIssue whose stored title differs from this search result title
-        parsed = self.parser.parse_search_result(
-            title=title,
-            url=search_result.get("url", ""),
-            provider=search_result.get("provider", ""),
+        discovered_issue = self._find_discovered_issue(
+            tracking_id,
+            title,
+            search_result.get("url", ""),
+            search_result.get("provider", ""),
+            session,
         )
-
-        discovered_issue = None
-        if parsed:
-            fuzzy_group = get_fuzzy_group_id(parsed.original_title)
-            discovered_issue = (
-                session.query(DiscoveredIssue)
-                .filter(
-                    DiscoveredIssue.tracking_id == tracking_id,
-                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
-                )
-                .first()
-            )
 
         if not discovered_issue:
             logger.error(f"Could not find DiscoveredIssue after recording: {title}")
@@ -1159,23 +1189,13 @@ class DownloadManager:
             return None
 
         # Find the discovered issue by fuzzy_match_group
-        parsed = self.parser.parse_search_result(
-            title=title,
-            url=search_result.get("url", ""),
-            provider=search_result.get("provider", ""),
+        discovered_issue = self._find_discovered_issue(
+            tracking_id,
+            title,
+            search_result.get("url", ""),
+            search_result.get("provider", ""),
+            session,
         )
-
-        discovered_issue = None
-        if parsed:
-            fuzzy_group = get_fuzzy_group_id(parsed.original_title)
-            discovered_issue = (
-                session.query(DiscoveredIssue)
-                .filter(
-                    DiscoveredIssue.tracking_id == tracking_id,
-                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
-                )
-                .first()
-            )
 
         if not discovered_issue:
             logger.error(f"Could not find DiscoveredIssue after recording for batch: {title}")
@@ -1306,8 +1326,13 @@ class DownloadManager:
 
             if not discovered_issue:
                 now = utc_now()
+                # Get the tracking record to access user_id
+                tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+                if not tracking:
+                    raise ValueError(f"Tracking ID {tracking_id} not found")
+
                 discovered_issue = DiscoveredIssue(
-                    user_id=1,
+                    user_id=tracking.user_id,
                     tracking_id=tracking_id,
                     title=title,
                     normalized_title=parsed.cleaned_title.lower(),
@@ -1349,6 +1374,7 @@ class DownloadManager:
             )
 
         except Exception as e:
+            session.rollback()
             logger.warning(
                 f"[DownloadManager] Could not link manual submission {submission.id} to DiscoveredIssue: {e}",
                 exc_info=True,
@@ -1749,34 +1775,36 @@ class DownloadManager:
             remaining_slots = max(0, self.max_downloads - active_count)
             logger.debug(f"Auto-download: {remaining_slots} slots available ({active_count} in progress)")
 
-            if remaining_slots <= 0:
-                return 0
+        if remaining_slots <= 0:
+            return 0
 
-            download_queue = issue_discovery_service.get_download_queue(session, limit=remaining_slots)
-            if not download_queue:
-                return 0
+        download_queue = issue_discovery_service.get_download_queue(session, limit=remaining_slots)
+        if not download_queue:
+            return 0
 
-            logger.info(f"Auto-download: Submitting {len(download_queue)} issues")
-            submitted_count = 0
-            for issue in download_queue:
-                try:
-                    submission = self.submit_from_discovered_issue(issue.id, session)
-                    if submission:
-                        submitted_count += 1
-                        logger.info(
-                            f"Auto-download: Submitted '{issue.title}' "
-                            f"(priority {issue.download_priority}, job_id: {submission.job_id})"
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"Auto-download: Error submitting '{issue.title}': {e}",
-                        exc_info=True,
+        logger.info(f"Auto-download: Submitting {len(download_queue)} issues")
+        submitted_count = 0
+        for issue in download_queue:
+            try:
+                # submit_from_discovered_issue acquires _slot_lock internally;
+                # must be called outside any outer _slot_lock to avoid deadlock.
+                submission = self.submit_from_discovered_issue(issue.id, session)
+                if submission:
+                    submitted_count += 1
+                    logger.info(
+                        f"Auto-download: Submitted '{issue.title}' "
+                        f"(priority {issue.download_priority}, job_id: {submission.job_id})"
                     )
+            except Exception as e:
+                logger.error(
+                    f"Auto-download: Error submitting '{issue.title}': {e}",
+                    exc_info=True,
+                )
 
-            if submitted_count > 0:
-                logger.info(f"Auto-download: Submitted {submitted_count} downloads")
+        if submitted_count > 0:
+            logger.info(f"Auto-download: Submitted {submitted_count} downloads")
 
-            return submitted_count
+        return submitted_count
 
 
 # Export all public items for wildcard imports

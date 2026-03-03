@@ -13,6 +13,7 @@ from typing import Dict
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.config import ConfigLoader
+from core.logging_config import configure_logging
 
 # ==============================================================================
 # Application Defaults
@@ -26,16 +27,16 @@ DEFAULT_LOG_FILE = "./local/logs/periodical_manager.log"
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_SERVER_HOST = "0.0.0.0"
 DEFAULT_SERVER_PORT = 8000
-LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
     """
     Set up required directories from configuration.
 
-    Creates all necessary application directories (database, downloads, organized files,
-    cache, logs) based on configuration with fallback to defaults. Ensures parent
-    directories exist before application startup.
+    ``config_loader.get_storage()`` already validates and creates all storage
+    directories (db parent, downloads, library, cache).  The only directory that
+    ``get_storage()`` does **not** create is the log directory, so this function
+    is responsible solely for that.
 
     Args:
         config_loader: Configuration loader instance with storage and logging config
@@ -66,42 +67,26 @@ def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
     paths["log_file"] = Path(log_file)
     paths["log_dir"] = paths["log_file"].parent
 
-    # Create all required directories
-    for directory in [
-        paths["db_path"].parent,
-        paths["download_dir"],
-        paths["library_dir"],
-        paths["cache_dir"],
-        paths["log_dir"],
-    ]:
-        directory.mkdir(parents=True, exist_ok=True)
+    # Storage dirs are created by get_storage() → _validate_storage_paths().
+    # Only the log directory needs explicit creation here.
+    paths["log_dir"].mkdir(parents=True, exist_ok=True)
 
     return paths
 
 
-def _setup_logging(config_loader: ConfigLoader, log_file: Path) -> None:
+def _setup_logging(log_file: Path, log_level: str) -> None:
     """
     Configure application logging with file and console handlers.
 
-    Sets up Python logging with INFO level by default, configurable via config.
-    Logs are written to both the specified file and console (stdout) for
-    monitoring during development and production.
+    Delegates to :func:`core.logging_config.configure_logging` which installs the
+    structured :class:`~core.logging_config.ContextualFormatter` and suppresses noisy
+    third-party loggers.
 
     Args:
-        config_loader: Configuration loader instance
-        log_file: Path to log file (must exist, parent dir created by _setup_directories)
-
-    Raises:
-        PermissionError: If log file cannot be written due to permissions
-        OSError: If log file cannot be created
+        log_file: Path to log file (parent dir created by _setup_directories)
+        log_level: Resolved log level string (e.g. "INFO", "DEBUG")
     """
-    log_config = config_loader.get_logging()
-    log_level = log_config.get("level", DEFAULT_LOG_LEVEL).upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level),
-        format=LOG_FORMAT,
-        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
-    )
+    configure_logging(level=log_level, log_file=str(log_file))
 
 
 def main():
@@ -126,10 +111,10 @@ def main():
     Raises:
         SystemExit: On keyboard interrupt (exit code 0) or fatal error (exit code 1)
     """
-    # Initialize configuration and setup
     config_loader = ConfigLoader()
     paths = _setup_directories(config_loader)
-    _setup_logging(config_loader, paths["log_file"])
+    log_level = config_loader.get_logging().get("level", DEFAULT_LOG_LEVEL).upper()
+    _setup_logging(paths["log_file"], log_level)
 
     logger = logging.getLogger(__name__)
 
@@ -141,21 +126,15 @@ def main():
         import uvicorn
 
         logger.info("Starting Curator...")
-        logger.info("Access the web UI at: http://localhost:8000")
 
-        # Enable uvicorn access logs only if DEBUG logging is enabled
-        # This reduces log noise in production while keeping detailed logs in development
-        log_config = config_loader.get_logging()
-        log_level = log_config.get("level", DEFAULT_LOG_LEVEL).upper()
         access_log = log_level == "DEBUG"
 
-        # Get server configuration with environment variable override support
         server_config = config_loader.get_server()
         host = server_config.get("host", DEFAULT_SERVER_HOST)
         port = server_config.get("port", DEFAULT_SERVER_PORT)
 
-        # Start the ASGI server (blocks until shutdown signal received)
-        # Configure timeouts to prevent H11 protocol errors
+        logger.info(f"Access the web UI at: http://localhost:{port}")
+
         uvicorn.run(
             app,
             host=host,

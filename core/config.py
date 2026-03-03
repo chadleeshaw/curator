@@ -548,6 +548,9 @@ class ConfigLoader:
             self.config[CONFIG_KEY_JWT_SECRET] = secrets.token_urlsafe(32)
             self.save_config(self.config)
             logger.info("Generated and saved new JWT secret")
+            logger.warning(
+                "JWT secret has been auto-generated and saved to config.yaml. This is insecure for production use. Please rotate this secret in a production environment."
+            )
         return self.config[CONFIG_KEY_JWT_SECRET]
 
     def save_config(self, config: Dict[str, Any]) -> None:
@@ -580,7 +583,7 @@ class ConfigLoader:
         """
         Get allowed CORS origins.
 
-        Priority: CURATOR_CORS_ORIGINS env var > cors_origins config key > default ["*"].
+        Priority: CURATOR_CORS_ORIGINS env var > cors_origins config key > default ["http://localhost:8000"].
 
         The env var accepts comma-separated origins:
             CURATOR_CORS_ORIGINS=http://localhost:8000,https://myapp.com
@@ -598,7 +601,7 @@ class ConfigLoader:
             if isinstance(config_val, str):
                 return [o.strip() for o in config_val.split(",") if o.strip()]
 
-        return ["*"]  # Default: open (restrict via config or env var in production)
+        return ["http://localhost:8000"]  # Default: localhost only (restrict via config or env var in production)
 
     def reload_config(self) -> None:
         """Reload config from file"""

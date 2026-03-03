@@ -26,10 +26,6 @@ from core.parsers import utc_now
 Base = declarative_base()
 
 
-def utcnow():
-    return utc_now()
-
-
 class UTCDateTime(TypeDecorator):  # pylint: disable=too-many-ancestors
     """
     SQLAlchemy TypeDecorator that ensures all datetimes are TZ-aware UTC.
@@ -74,8 +70,8 @@ class Credentials(Base):
     password_hash = Column(String(255), nullable=False)
     api_token = Column(String(255), nullable=True, unique=True, index=True)
     is_admin = Column(Boolean, nullable=False, default=False)
-    created_at = Column(UTCDateTime, default=utcnow)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utc_now)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def set_password(self, password: str) -> None:
         self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -130,8 +126,8 @@ class Periodical(Base):
     parsed_metadata = Column(JSON, nullable=True)
     derived_metadata = Column(JSON, nullable=True)
     extra_metadata = Column(JSON, nullable=True)
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
     tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=True, index=True)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -197,8 +193,8 @@ class PeriodicalTracking(Base):
 
     searches_without_new_issues = Column(Integer, default=0)
 
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -254,7 +250,7 @@ class SearchResult(Base):
     publication_date = Column(UTCDateTime, nullable=True)
     raw_metadata = Column(JSON, nullable=True)
     fuzzy_match_group_id = Column(String(255), nullable=True, index=True)
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
     periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -304,8 +300,8 @@ class DownloadSubmission(Base):
     last_error = Column(String(512), nullable=True)
     extra_status = Column(String(512), nullable=True)
     file_path = Column(String(512), nullable=True)
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -352,10 +348,10 @@ class OCRJob(Base):
     last_error = Column(String(512), nullable=True)
     ocr_metadata = Column(JSON, nullable=True)
     processing_time_seconds = Column(Integer, nullable=True)
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
     started_at = Column(UTCDateTime, nullable=True)
     completed_at = Column(UTCDateTime, nullable=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -425,8 +421,8 @@ class DiscoveredIssue(Base):
     language = Column(String(50), nullable=True, index=True)
     country = Column(String(50), nullable=True, index=True)
 
-    first_seen = Column(UTCDateTime, default=utcnow, index=True)
-    last_seen = Column(UTCDateTime, default=utcnow, index=True)
+    first_seen = Column(UTCDateTime, default=utc_now, index=True)
+    last_seen = Column(UTCDateTime, default=utc_now, index=True)
     times_seen = Column(Integer, default=1)
 
     # Download state: discovered → wanted → queued → pending → downloading → completed/failed/permanently_failed/ignored
@@ -450,8 +446,8 @@ class DiscoveredIssue(Base):
 
     extra_metadata = Column(JSON, nullable=True)
 
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -506,8 +502,8 @@ class Stack(Base):
     categories = Column(JSON, nullable=True)
     cover_override_path = Column(String(512), nullable=True)
     sort_order = Column(Integer, nullable=False, default=0)
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(UTCDateTime, default=utc_now, index=True)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -538,7 +534,7 @@ class StackMembership(Base):
         index=True,
     )
     periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, unique=True, index=True)
-    added_at = Column(UTCDateTime, default=utcnow)
+    added_at = Column(UTCDateTime, default=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -567,9 +563,9 @@ class ReadingProgress(Base):
     current_chapter = Column(Integer, nullable=True)
     total_pages = Column(Integer, nullable=True)
     progress_percent = Column(Integer, nullable=True)
-    last_read_at = Column(UTCDateTime, default=utcnow, index=True)
-    created_at = Column(UTCDateTime, default=utcnow)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    last_read_at = Column(UTCDateTime, default=utc_now, index=True)
+    created_at = Column(UTCDateTime, default=utc_now)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
