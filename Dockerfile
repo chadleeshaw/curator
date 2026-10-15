@@ -15,7 +15,7 @@ COPY requirements-prod.txt /tmp/requirements.txt
 
 # Install Python packages with pip cache
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --user -r /tmp/requirements.txt
+    pip install --prefix=/install -r /tmp/requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.13-slim
@@ -42,9 +42,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     unrar-free \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
+# Copy Python packages from builder (system-wide, so the app can run as a non-root user)
+COPY --from=builder /install /usr/local
 
 # Build-time version info (passed from CI/CD or docker build)
 ARG BUILD_VERSION=unknown
