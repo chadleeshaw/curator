@@ -10,19 +10,16 @@ import asyncio
 import logging
 import time
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import Any
 
-from core.parsers import utc_now
 from core import constants
+from core.parsers import utc_now
 from core.utils.aasync import BACKGROUND_TASK_EXECUTOR
-
-if TYPE_CHECKING:
-    from web.app import AppState
 
 logger = logging.getLogger(__name__)
 
 
-async def feed_sync_task(app_state: "AppState") -> None:
+async def feed_sync_task(app_state: Any) -> None:
     """Sync RSS feeds from all providers into the local entry cache."""
 
     def _run_feed_sync():
@@ -49,7 +46,7 @@ async def feed_sync_task(app_state: "AppState") -> None:
         logger.error(f"Feed sync error: {e}", exc_info=True)
 
 
-async def auto_download_task(app_state: "AppState") -> None:
+async def auto_download_task(app_state: Any) -> None:
     """Cache-first adaptive search and download for tracked periodicals."""
     logger.info("Starting auto-download task")
 
@@ -62,7 +59,7 @@ async def auto_download_task(app_state: "AppState") -> None:
             logger.debug("Auto-download: Starting Issue Discovery & Tracking run")
 
             # Phase 1.5: Cache-first local matching (zero API calls)
-            cache_match_new = _process_cache_matches(app_state, db_session)
+            _process_cache_matches(app_state, db_session)
 
             # Phase 2: Adaptive per-periodical API search
             _process_periodical_searches(app_state, db_session)
@@ -85,7 +82,7 @@ async def auto_download_task(app_state: "AppState") -> None:
         logger.error(f"Auto-download error: {e}", exc_info=True)
 
 
-def _process_cache_matches(app_state: "AppState", db_session) -> int:
+def _process_cache_matches(app_state: Any, db_session) -> int:
     """Process cached feed entries and match against tracked periodicals.
 
     Returns:
@@ -146,23 +143,34 @@ def _process_cache_matches(app_state: "AppState", db_session) -> int:
     return cache_match_new
 
 
-def _process_periodical_searches(app_state: "AppState", db_session) -> None:
+def _is_rate_limited(download_manager: Any) -> bool:
+    """Return True if all providers or any individual search provider is rate limited."""
+    if download_manager.all_providers_rate_limited:
+        return True
+    search_service = getattr(download_manager, "search_service", None)
+    if search_service is not None and getattr(search_service, "any_provider_rate_limited", False):
+        return True
+    return any(getattr(p, "is_rate_limited", False) for p in getattr(download_manager, "search_providers", []) or [])
+
+
+def _process_periodical_searches(app_state: Any, db_session) -> None:
     """Search for issues of periodicals that need refresh per adaptive scheduler.
 
     Includes rate-limit-aware pacing: re-checks provider status after each search
     and stops early when all providers are exhausted, avoiding wasted iterations
     and unfair adaptive scheduler penalties.
     """
-    periodicals_to_search = app_state.search_scheduler.select_periodicals_to_search(db_session)
+    periodicals_to_search: list[Any] = app_state.search_scheduler.select_periodicals_to_search(db_session)
 
     if not periodicals_to_search:
         logger.debug("Auto-download: No periodicals need searching at this time")
         return
 
-    # Check if all providers are rate-limited before we even start
-    if app_state.download_manager.all_providers_rate_limited:
+    # Check if any provider is rate-limited before we even start so we don't
+    # mark periodicals as searched when an indexer is in cooldown
+    if _is_rate_limited(app_state.download_manager):
         logger.info(
-            "Auto-download: All search providers are rate limited, deferring %d periodical searches to next run",
+            "Auto-download: Search provider(s) rate limited, deferring %d periodical searches to next run",
             len(periodicals_to_search),
         )
         return
@@ -180,10 +188,10 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
         try:
             # Re-check rate limits before each search — providers may have become
             # rate-limited from the previous iteration's API calls
-            if app_state.download_manager.all_providers_rate_limited:
+            if _is_rate_limited(app_state.download_manager):
                 remaining = len(periodicals_to_search) - i
                 logger.info(
-                    "Auto-download: All providers hit rate limits after %d searches, "
+                    "Auto-download: Provider(s) hit rate limits after %d searches, "
                     "deferring %d remaining periodicals to next run",
                     searched_count,
                     remaining,
@@ -224,9 +232,9 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
 
             if not search_results:
                 logger.debug(f"Auto-download: No results found for '{periodical.title}'")
-                # Only penalize the adaptive scheduler if providers aren't all rate-limited
-                # (if they are, the empty result is due to rate limiting, not a real empty search)
-                if not app_state.download_manager.all_providers_rate_limited:
+                # Only penalize the adaptive scheduler if no providers were rate-limited
+                # (if any were, the empty result may be due to rate limiting, not a real empty search)
+                if not _is_rate_limited(app_state.download_manager):
                     app_state.search_scheduler.update_search_stats(periodical.id, 0, db_session)
                 continue
 
@@ -255,7 +263,7 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
         logger.info(f"Auto-download: Searched {searched_count} periodicals, " f"{skipped_cache} skipped (cache-fresh)")
 
 
-def _extract_search_aliases(periodical) -> list:
+def _extract_search_aliases(periodical: Any) -> list[str] | None:
     """Extract search aliases from tracking record."""
     if not periodical.search_aliases:
         return None
@@ -266,7 +274,7 @@ def _extract_search_aliases(periodical) -> list:
     return aliases if aliases else None
 
 
-def _cleanup_stale_search_results(app_state: "AppState", db_session) -> None:
+def _cleanup_stale_search_results(app_state: Any, db_session) -> None:
     """Remove search results older than retention period."""
     try:
         from datetime import timedelta
@@ -289,7 +297,7 @@ def _cleanup_stale_search_results(app_state: "AppState", db_session) -> None:
         logger.warning(f"Auto-download: Search result cleanup error: {e}")
 
 
-async def download_monitoring_task(app_state: "AppState") -> None:
+async def download_monitoring_task(app_state: Any) -> None:
     """Monitor download client and scan downloads folder for files to import."""
     if not app_state.download_monitor_task:
         return
@@ -305,12 +313,12 @@ async def download_monitoring_task(app_state: "AppState") -> None:
         logger.error(f"Download monitoring error: {e}", exc_info=True)
 
 
-async def cleanup_orphaned_covers_task(app_state: "AppState") -> None:
+async def cleanup_orphaned_covers_task(app_state: Any) -> None:
     """Clean up cover files that aren't tied to any periodical."""
     await app_state.cover_cleanup_task.run()
 
 
-async def ocr_processing_task(app_state: "AppState") -> None:
+async def ocr_processing_task(app_state: Any) -> None:
     """Process queued OCR jobs with process pool."""
     try:
         interval = app_state.tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
@@ -326,7 +334,7 @@ async def ocr_processing_task(app_state: "AppState") -> None:
         logger.error(f"OCR processor error: {e}", exc_info=True)
 
 
-async def folder_cleanup_periodic_task(app_state: "AppState") -> None:
+async def folder_cleanup_periodic_task(app_state: Any) -> None:
     """Clean up empty folders and folders without importable files."""
     try:
         loop = asyncio.get_event_loop()
@@ -337,7 +345,7 @@ async def folder_cleanup_periodic_task(app_state: "AppState") -> None:
         logger.error(f"Folder cleanup error: {e}", exc_info=True)
 
 
-async def auto_metadata_periodic_task(app_state: "AppState") -> None:
+async def auto_metadata_periodic_task(app_state: Any) -> None:
     """Backfill derived_metadata, sync issue_date, and queue missing OCR/text scans."""
     try:
         from core.utils import run_in_thread
@@ -368,7 +376,7 @@ async def auto_metadata_periodic_task(app_state: "AppState") -> None:
         logger.error(f"Auto-metadata error: {e}", exc_info=True)
 
 
-async def file_reorganizer_periodic_task(app_state: "AppState") -> None:
+async def file_reorganizer_periodic_task(app_state: Any) -> None:
     """Reorganize files for periodicals flagged with needs_reorganization."""
     try:
         from core.utils import run_in_thread

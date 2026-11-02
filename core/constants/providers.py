@@ -33,6 +33,18 @@ Note: Categories 6000, 8000, and 8010 are included because periodicals are somet
       placed there, but they require additional pattern-based validation.
 """
 
+NEWSNAB_DEFAULT_RSS_CATEGORIES = "7010,7030,6060"
+"""
+Default Newsnab categories for queryless RSS feed polling (FeedSyncService).
+
+Unlike targeted title searches (`q=Title`), queryless RSS polls (`t=search` with no `q`)
+return the latest N uploads across all requested categories combined. Including broad
+parent categories like 6000 (XXX video scenes), 7020 (fiction ebooks), or 8000/8010
+(Other/Misc) floods the 100-item RSS window and pushes periodical uploads out of view.
+Restricting RSS polling to 7010 (Books/Mags), 7030 (Books/Comics), and 6060 (XXX/ImageSet)
+keeps the RSS window focused on periodicals (covering 24-36+ hours of uploads per poll).
+"""
+
 NEWSNAB_CATEGORY_MAP = {
     CATEGORY_MAGAZINE: "7010,8000,8010",  # Books/Mags + Other/Misc (periodicals sometimes in Other)
     CATEGORY_COMIC: "7030,8000,8010",  # Books/Comics + Other/Misc (comics sometimes in Other)

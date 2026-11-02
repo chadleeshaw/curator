@@ -5,14 +5,16 @@ Handles provider search with timeout, parsing, and filtering.
 
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from core.interfaces import SearchProvider
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
-from core.parsers import Parser, TitleMatcher, LANGUAGE_INDICATORS
+from core.interfaces import SearchProvider
+from core.parsers import LANGUAGE_INDICATORS, Parser, TitleMatcher
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from core.utils.result_filter import filter_result
 
@@ -25,7 +27,7 @@ class SearchService:
     # Default priority for providers without explicit priority
     DEFAULT_PROVIDER_PRIORITY = 50
 
-    def __init__(self, search_providers: List[SearchProvider], fuzzy_threshold: int = 80):
+    def __init__(self, search_providers: Sequence[SearchProvider], fuzzy_threshold: int = 80):
         """
         Initialize search service.
 
@@ -49,6 +51,21 @@ class SearchService:
             return False
 
         return all(provider.is_rate_limited for provider in self.search_providers)
+
+    @property
+    def any_provider_rate_limited(self) -> bool:
+        """
+        Check if any search provider is currently rate limited.
+
+        Used by scheduled background tasks to defer periodical searches when a
+        rate-limited indexer (e.g. Prowlarr/Newsnab) is exhausted even if an
+        unthrottled provider (e.g. Internet Archive) is still available, so
+        periodicals are not marked as searched without querying all indexers.
+        """
+        if not self.search_providers:
+            return False
+
+        return any(provider.is_rate_limited for provider in self.search_providers)
 
     def search_periodical_issues(
         self,
@@ -87,11 +104,14 @@ class SearchService:
         # Use ThreadPoolExecutor to search providers in parallel
         with ThreadPoolExecutor(max_workers=len(self.search_providers)) as executor:
             for provider in self.search_providers:
+                if provider.is_rate_limited:
+                    logger.debug(f"Skipping rate-limited provider {provider.name} for '{periodical_title}'")
+                    continue
                 try:
                     logger.debug(f"Searching {provider.name} for: {search_title}")
 
                     # Execute search with timeout, passing aliases for RSS cache matching and IA OR queries
-                    future = executor.submit(provider.search, search_title, None, aliases)
+                    future = executor.submit(provider.search, search_title, aliases=aliases)
                     try:
                         results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
                     except FuturesTimeoutError:

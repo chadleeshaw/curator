@@ -30,8 +30,8 @@ def test_db():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
         db_path = tmp_file.name
 
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     try:
-        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -121,10 +121,33 @@ class TestSelectPeriodicalsToSearch:
         # Select periodicals
         selected = search_scheduler.select_periodicals_to_search(session)
 
-        # Should include overdue
-        assert len(selected) >= 1
-        overdue_ids = [p.id for p in selected if p.id == overdue.id]
-        assert len(overdue_ids) == 1
+        # Should include overdue and exclude not_due
+        assert len(selected) == 1
+        assert selected[0].id == overdue.id
+
+        session.close()
+
+    def test_select_excludes_periodicals_on_long_interval(self, test_db, search_scheduler):
+        """Test that periodicals with 168h (7-day) interval searched 1 hour ago are NOT selected."""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        not_due_weekly = PeriodicalTracking(
+            olid="weekly-backoff",
+            title="Weekly Backoff Magazine",
+            track_all_editions=True,
+            last_searched=datetime.now(UTC) - timedelta(hours=1),
+            search_interval_hours=168,
+            user_id=1,
+        )
+        session.add(not_due_weekly)
+        session.commit()
+
+        selected = search_scheduler.select_periodicals_to_search(session)
+        assert selected == []
+
+        stats = search_scheduler.get_search_statistics(session)
+        assert stats["overdue"] == 0
 
         session.close()
 

@@ -136,3 +136,34 @@ class TestNewsnabDefaultRateLimitWait:
     def test_default_wait_is_five_minutes(self):
         """NEWSNAB_DEFAULT_RATE_LIMIT_WAIT should be 300 seconds (5 minutes)."""
         assert NEWSNAB_DEFAULT_RATE_LIMIT_WAIT == 300
+
+
+class TestNewsnabRssCategoriesAndAliasRateLimit:
+    """Tests for RSS category narrowing and rate-limit enforcement across aliases."""
+
+    def test_derives_periodical_rss_categories_from_broad_categories(self):
+        """Broad categories like 6000,7000,8000 should narrow to 6060,7010,7030 for RSS."""
+        provider = _make_provider(categories="6000,7000,8000")
+        assert provider.rss_categories == "6060,7010,7030"
+
+    def test_respects_explicit_rss_categories(self):
+        """Explicit rss_categories config should override derived categories."""
+        provider = _make_provider(categories="6000,7000,8000", rss_categories="7010,7020")
+        assert provider.rss_categories == "7010,7020"
+
+    def test_alias_search_stops_when_rate_limit_reached(self, monkeypatch):
+        """Alias loop should stop making requests once max_requests_per_hour is reached."""
+        provider = _make_provider(max_requests_per_hour=2, request_delay_seconds=0)
+        called_queries = []
+
+        def fake_search_xml_api(query, category=None):
+            called_queries.append(query)
+            return []
+
+        monkeypatch.setattr(provider, "_search_xml_api", fake_search_xml_api)
+
+        provider.search("Main Title", aliases=["Alias 1", "Alias 2", "Alias 3"])
+
+        assert called_queries == ["Main Title", "Alias 1"]
+        assert len(provider._request_times) == 2
+        assert provider.is_rate_limited

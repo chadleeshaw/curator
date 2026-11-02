@@ -7,8 +7,10 @@ import logging
 import re
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 import httpx
 
@@ -19,13 +21,14 @@ from core.constants.providers import (
     NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR,
     NEWSNAB_DEFAULT_RATE_LIMIT_WAIT,
     NEWSNAB_DEFAULT_REQUEST_DELAY,
+    NEWSNAB_DEFAULT_RSS_CATEGORIES,
     NEWSNAB_DEFAULT_SEARCH_LIMIT,
     NEWSNAB_REQUEST_TIMEOUT,
     NEWSNAB_RSS_MAX_RESULTS,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
-    UPLOAD_DATE_FORMATS,
     SECONDS_PER_MINUTE,
+    UPLOAD_DATE_FORMATS,
 )
 from core.interfaces import SearchProvider, SearchResult
 from core.parsers import utc_now
@@ -64,19 +67,49 @@ class NewsnabProvider(SearchProvider):
         self.request_delay_seconds = config.get("request_delay_seconds", NEWSNAB_DEFAULT_REQUEST_DELAY)
 
         # Rate limit tracking
-        self._request_times: List[float] = []
-        self._rate_limit_until: Optional[datetime] = None
-        self._rate_limit_reason: Optional[str] = None
+        self._request_times: list[float] = []
+        self._rate_limit_until: datetime | None = None
+        self._rate_limit_reason: str | None = None
         self._rate_limit_logged: bool = False
 
         # RSS mode configuration (used by FeedSyncService for cache-first auto-download)
         self.rss_max_results = config.get("rss_max_results", NEWSNAB_RSS_MAX_RESULTS)
+        self.rss_categories = str(config.get("rss_categories") or self._derive_rss_categories(str(self.categories)))
 
         # Search result limit per API query
         self.search_limit = config.get("search_limit", NEWSNAB_DEFAULT_SEARCH_LIMIT)
 
         if not self.api_key:
             raise ValueError("Newsnab provider requires api_key")
+
+    @staticmethod
+    def _derive_rss_categories(categories: str) -> str:
+        """Derive periodical-focused RSS categories from configured search categories.
+
+        Queryless RSS polling (`t=search` with no `q`) returns the latest N items
+        across all requested categories combined. Broad parent categories like 6000
+        (XXX video scenes), 7020 (fiction ebooks), and 8000/8010 (Other/Misc) drown
+        out magazine and comic uploads in the 100-item RSS window.
+
+        Maps:
+        - 7000 -> 7010,7030 (Books/Mags, Books/Comics)
+        - 6000 -> 6060 (XXX/ImageSet)
+        - Preserves explicit periodical subcategories (7010, 7030, 6060)
+        """
+        raw_cats = [c.strip() for c in categories.split(",") if c.strip()]
+        if not raw_cats:
+            return NEWSNAB_DEFAULT_RSS_CATEGORIES
+
+        rss_cats: list[str] = []
+        for cat in raw_cats:
+            if cat in ("7000", "7010", "7030"):
+                for mapped in ("7010", "7030") if cat == "7000" else (cat,):
+                    if mapped not in rss_cats:
+                        rss_cats.append(mapped)
+            elif cat in ("6000", "6060") and "6060" not in rss_cats:
+                rss_cats.append("6060")
+
+        return ",".join(rss_cats) if rss_cats else categories
 
     @property
     def is_rate_limited(self) -> bool:
@@ -117,7 +150,7 @@ class NewsnabProvider(SearchProvider):
 
     def _log_rate_limit_once(self) -> None:
         """Log rate limit warning once per cooldown period."""
-        if self._rate_limit_logged:
+        if self._rate_limit_logged or self._rate_limit_until is None:
             return
 
         remaining = (self._rate_limit_until - utc_now()).total_seconds()
@@ -160,7 +193,7 @@ class NewsnabProvider(SearchProvider):
         """Track a request for rate limiting"""
         self._request_times.append(time.time())
 
-    def _parse_rate_limit_from_error(self, error_text: str) -> Optional[int]:
+    def _parse_rate_limit_from_error(self, error_text: str) -> int | None:
         """
         Parse rate limit wait time from error response.
 
@@ -215,10 +248,8 @@ class NewsnabProvider(SearchProvider):
         wait_time = None
         retry_after = response.headers.get("Retry-After")
         if retry_after:
-            try:
+            with suppress(ValueError):
                 wait_time = int(retry_after)
-            except ValueError:
-                pass
 
         if not wait_time:
             wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
@@ -232,7 +263,7 @@ class NewsnabProvider(SearchProvider):
         )
         return True
 
-    def _check_xml_error(self, root: ET.Element) -> Optional[str]:
+    def _check_xml_error(self, root: ET.Element) -> str | None:
         """
         Check XML response for error element and handle rate limits.
 
@@ -264,7 +295,7 @@ class NewsnabProvider(SearchProvider):
         logger.warning(f"[{self.name}] API error: {error_desc} (code: {error_code})")
         return error_code
 
-    def _parse_xml_items(self, root: ET.Element, include_guid: bool = False) -> List[SearchResult]:
+    def _parse_xml_items(self, root: ET.Element, include_guid: bool = False) -> list[SearchResult]:
         """
         Parse RSS/XML items into SearchResult objects.
 
@@ -307,24 +338,18 @@ class NewsnabProvider(SearchProvider):
                 if attr_name == "category":
                     category_id = attr.get("value")
                 elif attr_name == "size":
-                    try:
+                    with suppress(ValueError, TypeError):
                         nzb_size = int(attr.get("value", 0))
-                    except (ValueError, TypeError):
-                        pass
                 elif attr_name == "files":
-                    try:
+                    with suppress(ValueError, TypeError):
                         nzb_files = int(attr.get("value", 0))
-                    except (ValueError, TypeError):
-                        pass
 
             # Fallback: get size from enclosure length attribute if not in attrs
             if nzb_size is None and enclosure_elem is not None:
-                try:
+                with suppress(ValueError, TypeError):
                     nzb_size = int(enclosure_elem.get("length", 0)) or None
-                except (ValueError, TypeError):
-                    pass
 
-            raw_metadata = {
+            raw_metadata: dict[str, Any] = {
                 "indexer": item.findtext("indexer", ""),
             }
             if upload_date:
@@ -378,17 +403,17 @@ class NewsnabProvider(SearchProvider):
                     f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
                 )
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[{self.name}] Could not parse rate limit from error response: {e}")
 
         return False
 
     def search(
         self,
         query: str = "",
-        category: str = None,
-        aliases: Optional[Sequence[str]] = None,
-    ) -> List[SearchResult]:
+        category: Any = None,
+        aliases: Sequence[str] | None = None,
+    ) -> list[SearchResult]:
         """
         Search Newsnab-compatible service for NZBs.
 
@@ -410,6 +435,7 @@ class NewsnabProvider(SearchProvider):
             if self._check_rate_limit():
                 logger.warning(f"[{self.name}] Skipping RSS fetch - rate limited")
                 return []
+            self._track_request()
             return self._search_xml_api_rss(category)
 
         if self._check_rate_limit():
@@ -443,6 +469,9 @@ class NewsnabProvider(SearchProvider):
                     alias = alias.strip()
                     if not alias or alias == query:
                         continue
+                    if self._check_rate_limit():
+                        logger.warning(f"[{self.name}] Skipping alias search for '{alias}' - rate limited")
+                        break
                     try:
                         if self.request_delay_seconds > 0 and self._request_times:
                             time_since_last = time.time() - self._request_times[-1]
@@ -466,7 +495,7 @@ class NewsnabProvider(SearchProvider):
 
         return results
 
-    def _search_xml_api(self, query: str, category: str = None) -> List[SearchResult]:
+    def _search_xml_api(self, query: str, category: str | None = None) -> list[SearchResult]:
         """Search using the legacy /api XML endpoint"""
         try:
             # Determine which categories to search
@@ -495,7 +524,7 @@ class NewsnabProvider(SearchProvider):
 
             response.raise_for_status()
 
-            root = ET.fromstring(response.content)
+            root = ET.fromstring(response.content)  # noqa: S314
 
             if self._check_xml_error(root) is not None:
                 return []
@@ -519,7 +548,7 @@ class NewsnabProvider(SearchProvider):
 
         return []
 
-    def _search_xml_api_rss(self, category: str = None) -> List[SearchResult]:
+    def _search_xml_api_rss(self, category: str | None = None) -> list[SearchResult]:
         """
         Search using the RSS mode (fetch latest releases without query).
 
@@ -533,8 +562,8 @@ class NewsnabProvider(SearchProvider):
             List of SearchResult objects
         """
         try:
-            # Determine which categories to search
-            cat_ids = self.categories  # Default: all configured categories
+            # Determine which categories to search (default: periodical-focused RSS categories)
+            cat_ids = self.rss_categories
 
             if category and category in self.category_map:
                 cat_ids = self.category_map[category]
@@ -559,7 +588,7 @@ class NewsnabProvider(SearchProvider):
 
             response.raise_for_status()
 
-            root = ET.fromstring(response.content)
+            root = ET.fromstring(response.content)  # noqa: S314
 
             # Check for errors, with special handling for RSS-not-supported (code 202)
             error_elem = root.find(".//error")
@@ -588,8 +617,8 @@ class NewsnabProvider(SearchProvider):
                             f"falling back to broad search"
                         )
                         return self._search_xml_api_rss_fallback(category)
-                except Exception:
-                    pass
+                except Exception as parse_err:
+                    logger.debug(f"[{self.name}] Could not check HTTP 400 error body: {parse_err}")
 
             if self._handle_http_error_rate_limit(e):
                 return []
@@ -602,7 +631,7 @@ class NewsnabProvider(SearchProvider):
 
         return []
 
-    def _search_xml_api_rss_fallback(self, category: str = None) -> List[SearchResult]:
+    def _search_xml_api_rss_fallback(self, category: str | None = None) -> list[SearchResult]:
         """
         Fallback search method for providers that don't support RSS mode (like Prowlarr).
 
@@ -663,7 +692,7 @@ class NewsnabProvider(SearchProvider):
 
         return all_results[:100]  # Limit to 100 results
 
-    def _parse_upload_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_upload_date(self, date_str: str) -> datetime | None:
         """
         Parse upload date from provider response.
 
@@ -688,7 +717,7 @@ class NewsnabProvider(SearchProvider):
         logger.debug(f"[{self.name}] Failed to parse upload date: {date_str}")
         return None
 
-    def test_connection(self) -> Dict[str, Any]:
+    def test_connection(self) -> dict[str, Any]:
         """
         Test the connection to the Newsnab provider.
 
@@ -731,7 +760,7 @@ class NewsnabProvider(SearchProvider):
 
             # Check if response is valid XML
             try:
-                root = ET.fromstring(response.content)
+                root = ET.fromstring(response.content)  # noqa: S314
 
                 # Check for error in response
                 error_elem = root.find(".//error")

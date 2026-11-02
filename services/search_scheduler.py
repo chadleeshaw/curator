@@ -5,10 +5,9 @@ Adjusts search intervals based on discovery success to optimize API rate limit u
 """
 
 import logging
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from core.parsers import utc_now
@@ -72,24 +71,17 @@ class SearchScheduler:
             return candidates[: self.max_periodicals_per_run]
 
         remaining_slots = self.max_periodicals_per_run - len(candidates)
-        next_search_due = (
-            PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
-        )
-        is_overdue = next_search_due <= now
 
-        overdue = (
+        searched = (
             session.query(PeriodicalTracking)
-            .filter(
-                and_(
-                    PeriodicalTracking.last_searched.isnot(None),
-                    is_overdue,
-                )
-            )
+            .filter(PeriodicalTracking.last_searched.isnot(None))
             .order_by(PeriodicalTracking.last_searched.asc())
             .all()
         )
 
-        downloadable_overdue = [p for p in overdue if self._has_download_criteria(p)][:remaining_slots]
+        downloadable_overdue = [p for p in searched if self._has_download_criteria(p) and self._is_overdue(p, now)][
+            :remaining_slots
+        ]
 
         if downloadable_overdue:
             logger.debug(f"Found {len(downloadable_overdue)} downloadable periodicals overdue for search")
@@ -100,19 +92,35 @@ class SearchScheduler:
         return candidates[: self.max_periodicals_per_run]
 
     @staticmethod
-    def _has_download_criteria(tracking: PeriodicalTracking) -> bool:
+    def _is_overdue(tracking: Any, now: datetime) -> bool:
+        """Check if a tracked periodical's search interval has elapsed.
+
+        Evaluated in Python rather than SQL because SQLite stores DateTime columns
+        as ISO text and has no native interval arithmetic (`col + timedelta` casts
+        the ISO string to an integer year in SQLite, making `col + interval <= now`
+        always evaluate to True).
+        """
+        last_searched: datetime | None = tracking.last_searched
+        if last_searched is None:
+            return True
+        if last_searched.tzinfo is None:
+            last_searched = last_searched.replace(tzinfo=UTC)
+        interval_hours = float(tracking.search_interval_hours) if tracking.search_interval_hours is not None else 0.0
+        next_search_due = last_searched + timedelta(hours=interval_hours)
+        return bool(next_search_due <= now)
+
+    @staticmethod
+    def _has_download_criteria(tracking: Any) -> bool:
         """Check if a tracked periodical has download criteria set.
 
         Periodicals in "watch only" mode should not be searched during auto-download
         to avoid wasting API rate limits.
         """
-        if tracking.track_all_editions:
+        if bool(tracking.track_all_editions):
             return True
-        if tracking.track_new_only:
+        if bool(tracking.track_new_only):
             return True
-        if tracking.selected_years and len(tracking.selected_years) > 0:
-            return True
-        return False
+        return bool(tracking.selected_years and len(tracking.selected_years) > 0)
 
     def update_search_stats(
         self,
@@ -123,7 +131,7 @@ class SearchScheduler:
         """
         Update search statistics and adjust search interval based on discovery success.
         """
-        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+        tracking: Any = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
             return
@@ -207,18 +215,9 @@ class SearchScheduler:
             .count()
         )
 
-        # Count overdue
-        overdue = (
-            session.query(PeriodicalTracking)
-            .filter(
-                and_(
-                    PeriodicalTracking.last_searched.isnot(None),
-                    PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
-                    <= now,
-                )
-            )
-            .count()
-        )
+        # Count overdue (evaluated in Python for SQLite compatibility)
+        searched = session.query(PeriodicalTracking).filter(PeriodicalTracking.last_searched.isnot(None)).all()
+        overdue = sum(1 for p in searched if self._is_overdue(p, now))
 
         return {
             "total_tracked": total_tracked,
@@ -245,7 +244,7 @@ class SearchScheduler:
         Returns:
             True if successful, False otherwise
         """
-        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+        tracking: Any = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
             return False
@@ -275,7 +274,7 @@ class SearchScheduler:
         """
         stats = {"reset": 0, "already_normal": 0}
 
-        periodicals = session.query(PeriodicalTracking).all()
+        periodicals: list[Any] = session.query(PeriodicalTracking).all()
 
         for tracking in periodicals:
             if tracking.search_interval_hours != self.normal_interval_hours:
