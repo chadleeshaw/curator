@@ -1,5 +1,6 @@
 """Alembic environment configuration."""
 
+import logging
 from logging.config import fileConfig
 
 from alembic import context
@@ -9,7 +10,10 @@ from sqlalchemy import engine_from_config, pool
 from models.database import Base  # noqa: F401 — registers all model metadata
 
 config = context.config
-fileConfig(config.config_file_name)
+# Only configure logging for the alembic CLI. When migrations run inside the app,
+# fileConfig would reset the root logger to WARNING and disable every app logger.
+if config.config_file_name and not logging.getLogger().handlers:
+    fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
 

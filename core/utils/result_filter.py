@@ -8,8 +8,9 @@ to ensure consistent result quality across all providers.
 
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
+from core.constants.country import ISO_COUNTRIES, THREE_LETTER_COUNTRY_CODES
 from core.constants.validation import (
     COLLECTION_INDICATOR_WORDS,
     METADATA_WORDS,
@@ -132,6 +133,36 @@ def _build_word_boundary_pattern(term: str) -> str:
         return rf"{escaped}\b"
     else:
         return escaped
+
+
+# Words that describe a periodical without naming it ("Forbes Magazine", "Vogue USA").
+# Releases routinely omit them, so they are not required to appear in a result title.
+_GENERIC_NAME_WORDS = (
+    METADATA_WORDS
+    | {code.lower() for code in ISO_COUNTRIES}
+    | {name.lower() for name in ISO_COUNTRIES.values()}
+    | {code.lower() for code in THREE_LETTER_COUNTRY_CODES}
+)
+
+
+def title_contains_name(result_title: str, names: Iterable[str]) -> bool:
+    """
+    Return True if *result_title* contains every distinctive word of at least one
+    of *names* (tracked title + aliases) as a whole word, in any order.
+
+    Indexers match loosely ("Time" returns "Timeless 003", "Timeout London"), so
+    results must be re-checked locally before they are queued for download.
+    The first word of a name is always required; later generic words (magazine,
+    country names/codes) are optional.
+    """
+    normalized_title = re.sub(r"[_.\-]", " ", result_title.lower())
+    for name in names:
+        tokens = re.sub(r"[_.\-]", " ", name.lower()).split()
+        words = [t for t in tokens if len(t) >= 2] or tokens
+        required = words[:1] + [w for w in words[1:] if w not in _GENERIC_NAME_WORDS]
+        if required and all(re.search(_build_word_boundary_pattern(w), normalized_title) for w in required):
+            return True
+    return False
 
 
 def _query_contains_collection_word(query: str) -> bool:

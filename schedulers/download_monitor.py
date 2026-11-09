@@ -497,6 +497,7 @@ class DownloadMonitor:
                 submission.last_error = "No job ID - download client never accepted this submission"
                 submission.updated_at = utc_now()
                 session.commit()
+                self._sync_discovered_issue_status(submission, DownloadStatus.FAILED, None, session)
                 failed_count += 1
                 continue
 
@@ -530,6 +531,8 @@ class DownloadMonitor:
                         and previous_status != DownloadSubmission.StatusEnum.FAILED
                     ):
                         failed_count += 1
+                        # Without this the issue stays "pending" forever and is never retried
+                        self._sync_discovered_issue_status(result, DownloadStatus.FAILED, None, session)
 
                         # Delete failed downloads from client if tracking settings allow
                         if self._should_delete_from_client(submission.tracking_id, session):

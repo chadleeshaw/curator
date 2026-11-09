@@ -31,7 +31,7 @@ from core.constants.country import (
     THREE_LETTER_COUNTRY_CODES,
 )
 from core.constants.validation import ANTI_PERIODICAL_PATTERNS, PERIODICAL_PATTERNS
-from core.utils.result_filter import title_matches_query
+from core.utils.result_filter import title_contains_name, title_matches_query
 from models.database import (
     DiscoveredIssue,
     DownloadStatus,
@@ -117,7 +117,7 @@ class IssueDiscoveryService:
                     stats["rejected_non_periodical"] += 1
                     continue
 
-                if not self._ia_title_matches_tracking(search_result, tracking):
+                if not self._title_matches_tracking(search_result, tracking):
                     stats["rejected_non_periodical"] += 1
                     continue
 
@@ -207,14 +207,23 @@ class IssueDiscoveryService:
             logger.warning(f"Failed to parse pubdate '{pubdate_str}': {parse_error}")
             return None
 
-    def _ia_title_matches_tracking(self, result: Dict[str, Any], tracking: PeriodicalTracking) -> bool:
-        """Return False for Internet Archive results whose title doesn't match the tracked periodical."""
-        if result.get("provider") != "internet_archive":
+    def _title_matches_tracking(self, result: Dict[str, Any], tracking: PeriodicalTracking) -> bool:
+        """Return False for results whose title doesn't match the tracked periodical.
+
+        Indexer searches are loose (substring/prefix), so without this check a
+        tracked "Time" queues "Timeless" comics and unrelated ebooks.
+        """
+        if result.get("provider") == "internet_archive":
+            title = result.get("title", "")
+            if not title_matches_query(title, tracking.title):
+                logger.debug(f"Skipping IA result with poor title match: '{title}' (tracking '{tracking.title}')")
+                return False
             return True
 
-        title = result.get("title", "")
-        if not title_matches_query(title, tracking.title):
-            logger.debug(f"Skipping IA result with poor title match: '{title}' " f"(tracking '{tracking.title}')")
+        title = result.get("original_title") or result.get("title", "")
+        aliases = [a.strip() for a in (tracking.search_aliases or "").split(",") if a.strip()]
+        if not title_contains_name(title, [tracking.title, *aliases]):
+            logger.debug(f"Skipping result with poor title match: '{title}' (tracking '{tracking.title}')")
             return False
         return True
 

@@ -337,6 +337,10 @@ class InternetArchiveProvider(SearchProvider):
         """
         results = []
 
+        # Empty query = feed sync. Sorting by popularity returns the same items on every
+        # poll, so ask for the newest uploads instead.
+        sort = self.sort if query else "-addeddate"
+
         # Search via API
         if self._check_rate_limit():
             logger.warning(f"[{self.name}] Skipping API search for '{query}' - rate limited")
@@ -355,7 +359,7 @@ class InternetArchiveProvider(SearchProvider):
                     search_results = search_items(
                         ia_query,
                         fields=IA_SEARCH_FIELDS,
-                        sorts=[self.sort],
+                        sorts=[sort],
                         params={"rows": self.max_results},
                     )
 
@@ -363,7 +367,8 @@ class InternetArchiveProvider(SearchProvider):
                 logger.info(f"[{self.name}] Collection search found {len(results)} results for '{query}'")
 
             # Tier 2: If zero results, search all texts without collection filter
-            if len(results) == 0:
+            # (never for feed sync: an unfiltered "newest texts" query matches nothing we track)
+            if len(results) == 0 and query:
                 logger.info(
                     f"[{self.name}] {'No collections configured' if not self.collections else 'Zero results in collections'} for '{query}', "
                     f"searching all texts..."
@@ -378,7 +383,7 @@ class InternetArchiveProvider(SearchProvider):
                     search_results_broad = search_items(
                         ia_query_broad,
                         fields=IA_SEARCH_FIELDS,
-                        sorts=[self.sort],
+                        sorts=[sort],
                         params={"rows": self.max_results},
                     )
                 results = self._process_search_results(search_results_broad, query)
