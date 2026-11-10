@@ -2,9 +2,13 @@
 File operations for periodicals
 """
 
+import asyncio
 import mimetypes
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from fastapi import Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -34,6 +38,31 @@ from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
+
+# PDF rendering holds the GIL, so threads render one page at a time: a heavy page
+# takes several seconds and a sidebar full of thumbnails used to queue ahead of the
+# page being read. Separate process pools let pages render in parallel and keep
+# thumbnails from delaying them. "spawn" matches the OCR pool (fork is unsafe with threads).
+# ponytail: workers start on first use (~5 s each, once per restart); pre-warm at
+# startup if that first open matters.
+_RENDER_POOL_SIZES = {"page": 4, "thumbnail": 2}
+_render_pools: Dict[str, ProcessPoolExecutor] = {}
+
+
+async def _render_in_process(pool_name: str, func: Callable[..., bytes], *args: Any) -> bytes:
+    """Run a PDF render function in the named process pool."""
+    pool = _render_pools.get(pool_name)
+    if pool is None:
+        pool = _render_pools[pool_name] = ProcessPoolExecutor(
+            max_workers=_RENDER_POOL_SIZES[pool_name], mp_context=multiprocessing.get_context("spawn")
+        )
+    try:
+        return await asyncio.get_running_loop().run_in_executor(pool, func, *args)
+    except BrokenProcessPool:
+        # A worker died (e.g. MuPDF crashed on a corrupt file). The pool is unusable
+        # from now on, so drop it and let the next request start a fresh one.
+        _render_pools.pop(pool_name, None)
+        raise
 
 
 @router.get("/periodicals/{periodical_id}/pdf")
@@ -361,7 +390,7 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int, _username: 
     file_path = await with_db_session(_shared._session_factory, operation)
 
     # Get page image
-    page_data = await run_in_thread(lambda: get_pdf_page(file_path, page_index))
+    page_data = await _render_in_process("page", get_pdf_page, file_path, page_index)
 
     if page_data is None:
         raise HTTPException(status_code=404, detail="Page not found or extraction failed")
@@ -399,7 +428,7 @@ async def get_pdf_page_thumbnail_endpoint(
     file_path = await with_db_session(_shared._session_factory, operation)
 
     # Get thumbnail
-    thumbnail_data = await run_in_thread(lambda: get_pdf_page_thumbnail(file_path, page_index))
+    thumbnail_data = await _render_in_process("thumbnail", get_pdf_page_thumbnail, file_path, page_index)
 
     if thumbnail_data is None:
         raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
