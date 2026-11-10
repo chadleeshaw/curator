@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Tuple
 from sqlalchemy.orm import Session
 
 from core.interfaces import SearchResult
+from core.utils.result_filter import title_contains_name
 from models.cache import RssFeedEntry
 from models.database import PeriodicalTracking
 
@@ -89,8 +90,8 @@ class FeedMatchService:
             matched = False
 
             for tracking_id, search_terms, tracking_record in tracking_search_terms:
-                # Use word boundary matching to avoid false positives
-                # "Maxim" should NOT match "Maximo Garcia"
+                # Same rule the API-search path applies when recording results, so a
+                # release is matched (or not) the same way whichever path finds it.
                 if self._title_matches_any_term(normalized_title, search_terms):
                     # Match found — convert to SearchResult format
                     search_result = self._entry_to_search_result(entry)
@@ -120,48 +121,13 @@ class FeedMatchService:
     @staticmethod
     def _title_matches_any_term(normalized_title: str, search_terms: List[str]) -> bool:
         """
-        Check if normalized title matches any search term using word boundaries.
-
-        Uses word boundary matching to prevent substring false positives:
+        Check if the title names any search term, using whole-word matching:
         - "Maxim" matches "Maxim Magazine" ✓
         - "Maxim" does NOT match "Maximo Garcia" ✗
 
-        Args:
-            normalized_title: Title normalized with delimiters replaced by spaces
-            search_terms: List of lowercase search terms to match
-
-        Returns:
-            True if any term matches as a whole word in the title
+        Delegates to the shared rule so feed matching and API search agree.
         """
-        for term in search_terms:
-            # Ensure term is lowercase for case-insensitive matching
-            term_lower = term.lower()
-
-            # Build word boundary pattern
-            # Handle special chars correctly (e.g., "C++", "40+")
-            escaped = re.escape(term_lower)
-
-            # Check if term starts/ends with word character
-            starts_with_word = bool(re.match(r"^\w", term_lower))
-            ends_with_word = bool(re.search(r"\w$", term_lower))
-
-            if starts_with_word and ends_with_word:
-                # Normal word like "maxim" - use boundaries on both sides
-                pattern = rf"\b{escaped}\b"
-            elif starts_with_word and not ends_with_word:
-                # Word ending with special char like "c++"
-                pattern = rf"\b{escaped}(?=\s|[^\w]|$)"
-            elif not starts_with_word and ends_with_word:
-                # Word starting with special char (rare)
-                pattern = rf"{escaped}\b"
-            else:
-                # All special chars (very rare)
-                pattern = escaped
-
-            if re.search(pattern, normalized_title):
-                return True
-
-        return False
+        return title_contains_name(normalized_title, search_terms)
 
     @staticmethod
     def _build_search_terms(

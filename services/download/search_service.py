@@ -136,11 +136,15 @@ class SearchService:
                             logger.debug(f"Skipping non-periodical result: {result.title}")
                             continue
 
-                        if not filter_result(
-                            result_title=result.title,
-                            result_provider=result.provider,
-                            raw_metadata=result.raw_metadata,
-                            search_query=search_title,
+                        # Aliases are part of the query, so a result may match any of them
+                        if not any(
+                            filter_result(
+                                result_title=result.title,
+                                result_provider=result.provider,
+                                raw_metadata=result.raw_metadata,
+                                search_query=name,
+                            )
+                            for name in [search_title, *(aliases or [])]
                         ):
                             continue
 

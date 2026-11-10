@@ -186,12 +186,17 @@ class SABnzbdClient(DownloadClient):
             return {"status": "unknown", "progress": 0}
 
         except Exception as e:
-            logger.error(f"Error getting SABnzbd status: {e}")
-            return {"status": "error", "progress": 0, "error": str(e)}
+            # "error" is treated as a failed download. Not being able to ask SABnzbd
+            # (restart, timeout) says nothing about the job, so keep waiting instead.
+            logger.warning(f"[SABnzbd] Could not get status for {job_id}, will retry: {e}")
+            return {"status": "pending", "progress": 0}
 
     def _check_queue_status(self, job_id: str) -> Optional[Dict[str, Any]]:
         """Check if job is in the active queue and return its status."""
         response = self._api_call("queue")
+        if "queue" not in response:
+            # _api_call returns {} on any failure; an empty answer is not "job is gone"
+            raise ConnectionError("SABnzbd queue request failed")
         queue = response.get("queue", {})
         slots = queue.get("slots", [])
         logger.debug(f"[SABnzbd] Queue has {len(slots)} active items")
@@ -288,6 +293,8 @@ class SABnzbdClient(DownloadClient):
         """Check if job is in history and return its status."""
         logger.debug("[SABnzbd] Job not in queue, checking history...")
         response = self._api_call("history")
+        if "history" not in response:
+            raise ConnectionError("SABnzbd history request failed")
 
         history = response.get("history", {})
         slots = history.get("slots", [])
@@ -319,11 +326,11 @@ class SABnzbdClient(DownloadClient):
         if "fail" in slot_status or "abort" in slot_status:
             return self._build_failure_status(job_id, slot, slot_status)
 
-        logger.warning(f"[SABnzbd] Job {job_id} has unknown status: {slot_status}")
-        return {
-            "status": "unknown",
-            "progress": int(float(slot.get("percentage", 0))),
-        }
+        # Anything else is post-processing (queued, verifying, repairing, extracting,
+        # moving, running). Reporting "unknown" here marked the download as failed
+        # with "job no longer exists" while SABnzbd was still unpacking it.
+        logger.debug(f"[SABnzbd] Job {job_id} is post-processing: {slot_status}")
+        return {"status": "downloading", "progress": 100}
 
     def _build_failure_status(self, job_id: str, slot: Dict[str, Any], slot_status: str) -> Dict[str, Any]:
         """Build failure status with detailed error information."""

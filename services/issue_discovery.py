@@ -213,16 +213,18 @@ class IssueDiscoveryService:
         Indexer searches are loose (substring/prefix), so without this check a
         tracked "Time" queues "Timeless" comics and unrelated ebooks.
         """
+        aliases = [a.strip() for a in (tracking.search_aliases or "").split(",") if a.strip()]
+        names = [tracking.title, *aliases]
+
         if result.get("provider") == "internet_archive":
             title = result.get("title", "")
-            if not title_matches_query(title, tracking.title):
+            if not any(title_matches_query(title, name) for name in names):
                 logger.debug(f"Skipping IA result with poor title match: '{title}' (tracking '{tracking.title}')")
                 return False
             return True
 
         title = result.get("original_title") or result.get("title", "")
-        aliases = [a.strip() for a in (tracking.search_aliases or "").split(",") if a.strip()]
-        if not title_contains_name(title, [tracking.title, *aliases]):
+        if not title_contains_name(title, names):
             logger.debug(f"Skipping result with poor title match: '{title}' (tracking '{tracking.title}')")
             return False
         return True

@@ -468,3 +468,40 @@ def test_sabnzbd_submit_content_network_error():
 
         job_id = client.submit_content(nzb_content="<nzb/>", title="Test")
         assert job_id is None
+
+
+def test_sabnzbd_post_processing_is_not_reported_as_gone():
+    """A job SABnzbd is still unpacking must not look like a missing job."""
+    client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})
+
+    with patch("clients.sabnzbd.httpx.get") as mock_get:
+        mock_response = Mock()
+        mock_response.json.side_effect = [
+            {"queue": {"slots": []}},
+            {"history": {"slots": [{"nzo_id": "nzo_12345", "status": "Extracting"}]}},
+        ]
+        mock_get.return_value = mock_response
+
+        assert client.get_status("nzo_12345")["status"] == "downloading"
+
+
+def test_sabnzbd_unreachable_does_not_fail_the_download():
+    """An API error says nothing about the job, so the status stays pending."""
+    client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})
+
+    with patch("clients.sabnzbd.httpx.get") as mock_get:
+        mock_get.side_effect = Exception("Connection refused")
+
+        assert client.get_status("nzo_12345")["status"] == "pending"
+
+
+def test_sabnzbd_job_missing_from_queue_and_history_is_unknown():
+    """A job that really is gone is still reported as unknown."""
+    client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})
+
+    with patch("clients.sabnzbd.httpx.get") as mock_get:
+        mock_response = Mock()
+        mock_response.json.side_effect = [{"queue": {"slots": []}}, {"history": {"slots": []}}]
+        mock_get.return_value = mock_response
+
+        assert client.get_status("nzo_12345")["status"] == "unknown"
