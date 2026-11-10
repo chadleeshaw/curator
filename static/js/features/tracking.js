@@ -3047,8 +3047,7 @@ window.closeLibraryDetailModal = function () {
 window.deleteLibraryCopy = async function (periodicalId, _issueKey) {
   const confirmed = await UIUtils.confirm(
     'Remove from Library',
-    '<p>Remove this copy from your library?</p>' +
-      '<p style="color: var(--text-secondary); font-size: 0.9em;">The file will be kept on disk but the database record will be removed.</p>'
+    'Remove this copy from your library?\n\nThe file will be kept on disk but the database record will be removed.'
   );
 
   if (!confirmed) return;
@@ -3222,15 +3221,15 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded, do
   }
 
   // Build confirmation message with filename
-  let confirmMessage = `<p><strong>File:</strong> ${escapeHtml(title)}</p><p><strong>Provider:</strong> ${escapeHtml(provider)}</p>`;
+  // Plain text: UIUtils.confirm escapes the message, .modal-message keeps the line breaks
+  let confirmMessage = `File: ${title}\nProvider: ${provider}\n\n`;
   if (alreadyDownloaded) {
-    confirmMessage +=
-      '<p style="color: #ff9800; margin-top: 10px;">You already have this issue in your library.</p><p>Re-download it anyway?</p>';
+    confirmMessage += 'You already have this issue in your library.\nRe-download it anyway?';
   } else if (downloadFailed) {
     confirmMessage +=
-      '<p style="color: #f44336; margin-top: 10px;">This download failed previously.</p><p>The file may be corrupt or unavailable. Try again anyway?</p>';
+      'This download failed previously.\nThe file may be corrupt or unavailable. Try again anyway?';
   } else {
-    confirmMessage += '<p style="margin-top: 10px;">Download this issue?</p>';
+    confirmMessage += 'Download this issue?';
   }
 
   const shouldDownload = await UIUtils.confirm('Download Issue', confirmMessage);
@@ -3478,11 +3477,11 @@ window.downloadAllAvailable = async function () {
     const count = tracking.availableIssues.length;
     const sourceNote =
       tracking.sourceFilter && tracking.sourceFilter !== 'all'
-        ? ` from <strong>${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}</strong>`
+        ? ` from ${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}`
         : '';
     const confirmed = await UIUtils.confirm(
       'Queue All Available Issues',
-      `Are you sure you want to queue all <strong>${count}</strong> available issues${sourceNote} for download?`
+      `Are you sure you want to queue all ${count} available issues${sourceNote} for download?`
     );
     if (!confirmed) return;
 
