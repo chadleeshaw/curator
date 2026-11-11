@@ -9,6 +9,7 @@ sys.path.insert(0, ".")
 
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -508,6 +509,102 @@ class TestIACollectionHandling:
         assert paths[0] == "file1.pdf"
         assert paths[1] == "file2.pdf"
         assert paths[2] == "file3.pdf"
+
+    def _monitor(self, test_db, temp_downloads_dir, download_manager, mock_file_importer, client):
+        download_manager.download_clients[client.type] = client
+        engine, session_factory = test_db
+        return DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+    def test_sabnzbd_path_with_commas_is_not_a_collection(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        client = Mock()
+        client.name = "SABnzbd"
+        client.type = "sabnzbd"
+        monitor = self._monitor(test_db, temp_downloads_dir, download_manager, mock_file_importer, client)
+        submission = SimpleNamespace(
+            client_name="SABnzbd",
+            file_path="/downloads/Science, Nature, Weekly.epub",
+        )
+
+        assert monitor._ia_collection_paths(submission) is None
+
+    def test_ia_legacy_comma_list_splits(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        client = Mock()
+        client.name = "Internet Archive Downloader"
+        client.type = "internet_archive"
+        monitor = self._monitor(test_db, temp_downloads_dir, download_manager, mock_file_importer, client)
+        submission = SimpleNamespace(
+            client_name="Internet Archive Downloader",
+            file_path="/downloads/a.pdf,/downloads/b.pdf",
+        )
+
+        assert monitor._ia_collection_paths(submission) == ["/downloads/a.pdf", "/downloads/b.pdf"]
+
+    def test_ia_title_with_a_comma_stays_one_path(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        client = Mock()
+        client.name = "Internet Archive Downloader"
+        client.type = "internet_archive"
+        monitor = self._monitor(test_db, temp_downloads_dir, download_manager, mock_file_importer, client)
+        submission = SimpleNamespace(
+            client_name="Internet Archive Downloader",
+            file_path="/downloads/World, Report.pdf",
+        )
+
+        assert monitor._ia_collection_paths(submission) is None
+
+    def test_ia_newline_list_keeps_commas_inside_a_name(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        client = Mock()
+        client.name = "Internet Archive Downloader"
+        client.type = "internet_archive"
+        monitor = self._monitor(test_db, temp_downloads_dir, download_manager, mock_file_importer, client)
+        submission = SimpleNamespace(
+            client_name="Internet Archive Downloader",
+            file_path="/downloads/My, Title.pdf\n/downloads/Other.pdf",
+        )
+
+        assert monitor._ia_collection_paths(submission) == [
+            "/downloads/My, Title.pdf",
+            "/downloads/Other.pdf",
+        ]
+
+    def test_hash_duplicate_counts_as_imported(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        engine, session_factory = test_db
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+        mock_file_importer.import_supported_files.return_value = {
+            "skip_reason": "duplicate_hash",
+            "periodical_id": 5,
+        }
+        submission = SimpleNamespace(tracking_id=None)
+
+        assert monitor._process_single_file(Path("already.pdf"), submission, Mock()) is True
+
+    def test_fuzzy_duplicate_stays_a_failure(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        engine, session_factory = test_db
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+        mock_file_importer.import_supported_files.return_value = {"skip_reason": "duplicate_fuzzy"}
+        submission = SimpleNamespace(tracking_id=None)
+
+        assert monitor._process_single_file(Path("similar.pdf"), submission, Mock()) is False
 
 
 class TestRemotePathMapping:

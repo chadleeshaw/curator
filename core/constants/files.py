@@ -2,6 +2,8 @@
 File processing and organization constants
 """
 
+from pathlib import Path
+
 # ==============================================================================
 # File Processing - Image Handling
 # ==============================================================================
@@ -132,3 +134,29 @@ YEAR_STRING_LENGTH = 4
 
 BYTES_PER_MB = 1024 * 1024
 """Bytes per megabyte, used for human-readable size formatting"""
+
+
+COLLECTION_PATH_SEPARATOR = "\n"
+"""Joins paths extracted from one Internet Archive archive. Titles contain commas."""
+
+
+def split_collection_paths(file_path: str | None) -> list[str] | None:
+    """Split an extracted collection into file paths.
+
+    New extracts are joined with newlines. Older rows used commas. A comma
+    splits only when every piece has a supported extension, so a title like
+    "Science, Nature" stays one path. Returns None for a single file.
+    """
+    if not file_path:
+        return None
+    if "\n" in file_path:
+        parts = [part.strip() for part in file_path.split("\n") if part.strip()]
+    elif "," in file_path:
+        parts = [part.strip() for part in file_path.split(",") if part.strip()]
+        if not all(Path(part).suffix.lower() in SUPPORTED_FILE_EXTENSIONS for part in parts):
+            return None
+    else:
+        return None
+    if len(parts) < 2:
+        return None
+    return parts

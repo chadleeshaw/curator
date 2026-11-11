@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from core.interfaces import DownloadClient
+from services.cache.provider_cache import NzbContentRejected
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,10 @@ def submit_with_nzb_content(
 
     Returns:
         Job ID from download client, or None if all methods failed
+
+    Raises:
+        NzbContentRejected: The indexer returned a non-NZB body. The URL is not
+            submitted, because the download client would fetch the same body.
     """
     if nzb_cache_service and type(client).submit_content is not DownloadClient.submit_content:
         try:
@@ -50,6 +55,8 @@ def submit_with_nzb_content(
                     logger.info(f"Submitted via cached NZB content: {title} -> {job_id}")
                     return job_id
                 logger.warning(f"submit_content failed for {title}, falling back to URL")
+        except NzbContentRejected:
+            raise
         except Exception as e:
             logger.warning(f"NZB content submission error: {e}, falling back to URL")
 

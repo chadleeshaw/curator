@@ -8,7 +8,9 @@ in a local SQLite database keyed by download URL.
 
 import logging
 import os
+import re
 from typing import Dict, Optional
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy import create_engine, func, text
@@ -21,6 +23,37 @@ from core.utils.rate_limiter import ProviderRateLimiter
 from models.cache import CacheBase, NzbCache
 
 logger = logging.getLogger(__name__)
+
+_ERROR_DESCRIPTION = re.compile(r"""<error\b[^>]*\bdescription=["']([^"']*)["']""", re.IGNORECASE)
+
+
+class NzbContentRejected(Exception):
+    """Provider returned a body that is not an NZB.
+
+    Handing the same URL to the download client fetches that body again,
+    so callers must not fall back to URL submission.
+    """
+
+
+def is_nzb_xml(content: Optional[str]) -> bool:
+    """Return True when the body looks like an NZB document."""
+    return bool(content) and "<nzb" in content.lower()
+
+
+def _nzb_rejection_reason(content: Optional[str]) -> str:
+    """Short reason for a body that failed the NZB check. No URL, no secrets."""
+    if not content:
+        return "empty response"
+    match = _ERROR_DESCRIPTION.search(content)
+    if match:
+        return match.group(1)
+    return f"response is not NZB XML ({len(content)} bytes)"
+
+
+def _url_for_log(url: str) -> str:
+    """Host and path only. Query strings carry API keys."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
 
 
 class NzbCacheService:
@@ -122,10 +155,14 @@ class NzbCacheService:
 
         Returns:
             NZB XML content as string, or None if unavailable
+
+        Raises:
+            NzbContentRejected: The provider responded with something other than an NZB.
+                The body is not cached. Callers must not submit the URL instead.
         """
         # Skip non-URL identifiers (e.g. Internet Archive slugs like "magazine-2008-13")
         if not download_url.startswith(("http://", "https://")):
-            logger.debug(f"Skipping NZB cache for non-URL identifier: {download_url[:80]}")
+            logger.debug(f"Skipping NZB cache for non-URL identifier: {_url_for_log(download_url)}")
             return None
 
         session = self._session_factory()
@@ -133,8 +170,15 @@ class NzbCacheService:
             # Check cache first
             cached = session.query(NzbCache).filter(NzbCache.download_url == download_url).first()
             if cached:
-                logger.debug(f"NZB cache hit for {download_url[:80]}")
-                return cached.nzb_content
+                if is_nzb_xml(cached.nzb_content):
+                    logger.debug(f"NZB cache hit for {_url_for_log(download_url)}")
+                    return cached.nzb_content
+                # Older builds stored indexer error pages. Drop them so they
+                # are not uploaded to the download client.
+                reason = _nzb_rejection_reason(cached.nzb_content)
+                session.delete(cached)
+                session.commit()
+                raise NzbContentRejected(reason)
 
             # Rate limit provider fetches
             if not self._nzb_rate_limiter.acquire("nzb_fetch"):
@@ -143,15 +187,16 @@ class NzbCacheService:
                 return None
 
             # Fetch from provider and cache
-            logger.info(f"Fetching NZB from provider: {download_url[:80]}")
+            logger.info(f"Fetching NZB from provider: {_url_for_log(download_url)}")
             response = httpx.get(download_url, timeout=30, follow_redirects=True)
             response.raise_for_status()
             nzb_content = response.text
 
-            if not nzb_content or "<nzb" not in nzb_content.lower():
-                logger.warning(f"Response does not appear to be valid NZB XML (length: {len(nzb_content or '')})")
+            if not is_nzb_xml(nzb_content):
+                reason = _nzb_rejection_reason(nzb_content)
+                logger.warning(f"Indexer did not return an NZB from {_url_for_log(download_url)}: {reason}")
+                raise NzbContentRejected(reason)
 
-            # Cache it (even if invalid — prevents repeated fetches)
             entry = NzbCache(
                 download_url=download_url,
                 nzb_content=nzb_content,
@@ -166,17 +211,18 @@ class NzbCacheService:
                 # Race condition: another request cached the same URL concurrently
                 # This is expected with concurrent downloads, rollback and fetch from cache
                 session.rollback()
-                logger.debug(f"NZB already cached by concurrent request: {download_url[:80]}")
+                logger.debug(f"NZB already cached by concurrent request: {_url_for_log(download_url)}")
                 cached = session.query(NzbCache).filter(NzbCache.download_url == download_url).first()
-                if cached:
+                if cached and is_nzb_xml(cached.nzb_content):
                     return cached.nzb_content
-                # Fallback: return the content we fetched (rare case)
-                logger.warning("Concurrent cache race but entry not found, returning fetched content")
+                if cached:
+                    raise NzbContentRejected(_nzb_rejection_reason(cached.nzb_content))
+                return nzb_content
 
             return nzb_content
 
         except httpx.HTTPError as e:
-            logger.error(f"Failed to fetch NZB from {download_url[:80]}: {e}", exc_info=True)
+            logger.error(f"Failed to fetch NZB from {_url_for_log(download_url)}: {e}")
             return None
 
         finally:

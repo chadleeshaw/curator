@@ -346,7 +346,9 @@ class FileImporter:
 
         return tracking_id, organization_pattern
 
-    def _check_hash_duplicate(self, content_hash: str, pdf_path: Path, skip_organize: bool, session: Session) -> bool:
+    def _check_hash_duplicate(
+        self, content_hash: str, pdf_path: Path, skip_organize: bool, session: Session
+    ) -> Optional[int]:
         """
         Check if file already exists in library by content hash.
 
@@ -357,7 +359,7 @@ class FileImporter:
             session: Database session
 
         Returns:
-            True if duplicate found (caller should skip import), False otherwise
+            Existing periodical id when the hash is already in the library, else None
         """
         existing_by_hash = (
             session.query(Periodical)
@@ -371,8 +373,8 @@ class FileImporter:
             logger.info(f"File already in library: '{pdf_path.name}' (matches existing file by content hash)")
             if not skip_organize:
                 self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
-            return True
-        return False
+            return existing_by_hash.id
+        return None
 
     def _build_tracking_title(self, base_title: str, parsed_country: Optional[str], pdf_path: Path) -> str:
         """
@@ -991,7 +993,9 @@ class FileImporter:
         )
         return parsed
 
-    def _get_content_hash(self, file_path: Path, skip_organize: bool, session: Session) -> Optional[str]:
+    def _get_content_hash(
+        self, file_path: Path, skip_organize: bool, session: Session
+    ) -> tuple[Optional[str], Optional[int]]:
         """
         Calculate content hash and check for hash-based duplicates.
 
@@ -1001,17 +1005,20 @@ class FileImporter:
             session: Database session
 
         Returns:
-            Content hash or None if duplicate found or hashing failed
+            (content hash, existing periodical id). The id is set when this
+            file is already in the library. The hash is None when hashing
+            failed or the file is a duplicate.
         """
         content_hash = hash_file_in_chunks(str(file_path))
         if not content_hash:
             logger.error(f"Failed to hash file {file_path}, skipping import")
-            return None
+            return None, None
 
-        if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):
-            return None
+        existing_id = self._check_hash_duplicate(content_hash, file_path, skip_organize, session)
+        if existing_id:
+            return None, existing_id
 
-        return content_hash
+        return content_hash, None
 
     def _determine_title_and_scan_need(
         self, tracking_id: Optional[int], parsed, file_path: Path, session: Session
@@ -1375,7 +1382,9 @@ class FileImporter:
                 return {"skip_reason": "invalid_title"}
 
             # Step 3: Calculate content hash and check for hash-based duplicates
-            content_hash = self._get_content_hash(file_path, skip_organize, session)
+            content_hash, existing_id = self._get_content_hash(file_path, skip_organize, session)
+            if existing_id:
+                return {"skip_reason": "duplicate_hash", "periodical_id": existing_id}
             if not content_hash:
                 return {"skip_reason": "parse_error"}
 
@@ -1882,7 +1891,7 @@ class FileImporter:
         import_result = worker_result["result"]
         parent_dir = worker_result.get("parent_dir")
 
-        if import_result and import_result.get("periodical_id"):
+        if import_result and import_result.get("periodical_id") and not import_result.get("skip_reason"):
             result.data["imported"] += 1
             logger.info(f"Successfully imported {file_type}: {file_path.name}")
             if parent_dir:

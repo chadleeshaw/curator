@@ -262,6 +262,24 @@ class IssueDiscoveryService:
             existing.latest_provider = parsed.provider
             existing.latest_pubdate = pubdate
 
+        # A failed issue keeps its URL when the pubdate does not move, so a
+        # repaired indexer (same release, new link) never replaces a dead one.
+        # Skip an older hit so it cannot clobber a newer URL. Run this while
+        # the status is still FAILED; the reset below changes it.
+        new_url = result.get("url")
+        same_or_newer = pubdate is None or existing.latest_pubdate is None or pubdate >= existing.latest_pubdate
+        if (
+            existing.download_status == DownloadStatus.FAILED
+            and new_url
+            and new_url != existing.latest_url
+            and same_or_newer
+        ):
+            logger.debug(f"Replacing failed URL for {existing.fuzzy_match_group}")
+            existing.latest_url = new_url
+            existing.latest_provider = parsed.provider
+            if pubdate is not None:
+                existing.latest_pubdate = pubdate
+
         search_result_id = result.get("search_result_id")
         if search_result_id and search_result_id not in existing.search_result_ids:
             existing.search_result_ids.append(search_result_id)

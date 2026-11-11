@@ -16,7 +16,7 @@ from core.constants.app import (
     MAX_IMPORT_RETRIES,
     ORPHANED_SUBMISSION_THRESHOLD_HOURS,
 )
-from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
+from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS, split_collection_paths
 from core.parsers import utc_now
 from core.utils import find_supported_files
 from services.importer.sidecar import create_sidecar_file
@@ -753,10 +753,11 @@ class DownloadMonitor:
                 else:
                     continue
 
-            # Check for comma-separated file paths (Internet Archive collection items)
-            # IA collections store multiple extracted file paths as comma-separated string
-            if "," in submission.file_path:
-                file_paths_str = submission.file_path.split(",")
+            # Internet Archive extracts store one path per line (older rows used
+            # commas). A comma in a SABnzbd storage path is part of the title.
+            collection_paths = self._ia_collection_paths(submission)
+            if collection_paths:
+                file_paths_str = collection_paths
                 logger.info(
                     f"[DownloadMonitor] Processing IA collection with {len(file_paths_str)} files "
                     f"for submission {submission.id}"
@@ -764,10 +765,6 @@ class DownloadMonitor:
                 collection_success_count = 0
 
                 for file_path_str in file_paths_str:
-                    file_path_str = file_path_str.strip()
-                    if not file_path_str:
-                        continue
-
                     file_path = self._find_file_in_downloads(file_path_str)
                     if not file_path:
                         logger.warning(
@@ -893,6 +890,10 @@ class DownloadMonitor:
             # This ensures the file is linked to the tracking that requested it
             result = self.file_importer.import_supported_files(file_path, session, tracking_id=submission.tracking_id)
 
+            if result and result.get("skip_reason") == "duplicate_hash":
+                logger.info(f"[DownloadMonitor] Already in library: {file_path.name}")
+                return True
+
             if result and result.get("periodical_id"):
                 logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
 
@@ -914,6 +915,20 @@ class DownloadMonitor:
                 exc_info=True,
             )
             return False
+
+    def _submission_is_internet_archive(self, submission: DownloadSubmission) -> bool:
+        """True when this submission was downloaded by the Internet Archive client."""
+        clients = getattr(self.download_manager, "download_clients", {})
+        for client in clients.values():
+            if client.name == submission.client_name and getattr(client, "type", None) == "internet_archive":
+                return True
+        return False
+
+    def _ia_collection_paths(self, submission: DownloadSubmission) -> Optional[list]:
+        """Paths from an Internet Archive extract, or None for a single file."""
+        if not submission.file_path or not self._submission_is_internet_archive(submission):
+            return None
+        return split_collection_paths(submission.file_path)
 
     def _sync_discovered_issue_status(
         self,

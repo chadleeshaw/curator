@@ -246,6 +246,72 @@ class TestInternetArchiveClientCompletedDownloads:
             assert completed[0]["title"] == "Test Magazine"
             assert completed[0]["file_path"] == "/path/to/file.pdf"
 
+    def test_get_completed_downloads_splits_newline_collection(self):
+        """A collection joined with newlines stays one path per file, commas included."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = InternetArchiveClient({"name": "IA Client", "downloads_dir": tmpdir})
+            job = DownloadJob(
+                job_id="collection",
+                identifier="test_id",
+                title="Collection",
+                dest_path=tmpdir,
+            )
+            job.status = "completed"
+            job.extracted_count = 2
+            job.file_path = "/downloads/My, Title.pdf\n/downloads/Other.pdf"
+            client._jobs["collection"] = job
+
+            completed = client.get_completed_downloads()
+
+            assert [item["file_path"] for item in completed] == [
+                "/downloads/My, Title.pdf",
+                "/downloads/Other.pdf",
+            ]
+            assert all(item["is_collection_item"] for item in completed)
+
+    def test_get_completed_downloads_keeps_legacy_comma_title_intact(self):
+        """A single extracted file whose name contains a comma is not a file list."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = InternetArchiveClient({"name": "IA Client", "downloads_dir": tmpdir})
+            job = DownloadJob(
+                job_id="single",
+                identifier="test_id",
+                title="Report",
+                dest_path=tmpdir,
+            )
+            job.status = "completed"
+            job.extracted_count = 1
+            job.file_path = "/downloads/World, Report.pdf"
+            client._jobs["single"] = job
+
+            completed = client.get_completed_downloads()
+
+            assert len(completed) == 1
+            assert completed[0]["file_path"] == "/downloads/World, Report.pdf"
+            assert completed[0]["is_collection_item"] is False
+
+    def test_get_completed_downloads_splits_legacy_comma_list(self):
+        """Older extracts stored a comma-joined list of supported files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = InternetArchiveClient({"name": "IA Client", "downloads_dir": tmpdir})
+            job = DownloadJob(
+                job_id="legacy",
+                identifier="test_id",
+                title="Collection",
+                dest_path=tmpdir,
+            )
+            job.status = "completed"
+            job.extracted_count = 2
+            job.file_path = "/downloads/a.pdf, /downloads/b.epub"
+            client._jobs["legacy"] = job
+
+            completed = client.get_completed_downloads()
+
+            assert [item["file_path"] for item in completed] == [
+                "/downloads/a.pdf",
+                "/downloads/b.epub",
+            ]
+
 
 class TestInternetArchiveClientDelete:
     """Test job deletion functionality"""

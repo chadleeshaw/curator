@@ -11,6 +11,7 @@ Tests cover:
 
 import pytest
 from datetime import datetime
+from types import SimpleNamespace
 
 from models.database import (
     PeriodicalTracking,
@@ -859,3 +860,80 @@ class TestSecondSearchReEvaluation:
         assert all(i.download_status == DownloadStatus.WANTED for i in issues)
 
         session.close()
+
+
+class TestFailedIssueUrlRefresh:
+    """A failed issue with an unchanged pubdate still takes a new indexer URL."""
+
+    def _issue(self, status, url="http://indexer.example/old", pubdate=None):
+        return SimpleNamespace(
+            last_seen=None,
+            times_seen=1,
+            latest_pubdate=pubdate or datetime(2024, 1, 15),
+            latest_url=url,
+            latest_provider="old",
+            search_result_ids=[],
+            download_status=status,
+            fuzzy_match_group="group",
+        )
+
+    def test_failed_issue_takes_a_new_url_at_the_same_pubdate(self, issue_discovery_service):
+        pubdate = datetime(2024, 1, 15)
+        existing = self._issue(DownloadStatus.FAILED, pubdate=pubdate)
+
+        issue_discovery_service._update_existing_issue(
+            existing,
+            {"url": "http://indexer.example/new"},
+            SimpleNamespace(provider="nzb.life"),
+            pubdate,
+            datetime(2024, 2, 1),
+        )
+
+        assert existing.latest_url == "http://indexer.example/new"
+        assert existing.latest_provider == "nzb.life"
+        assert existing.latest_pubdate == pubdate
+        assert existing.download_status == DownloadStatus.DISCOVERED
+
+    def test_wanted_issue_keeps_its_url_at_the_same_pubdate(self, issue_discovery_service):
+        pubdate = datetime(2024, 1, 15)
+        existing = self._issue(DownloadStatus.WANTED, pubdate=pubdate)
+
+        issue_discovery_service._update_existing_issue(
+            existing,
+            {"url": "http://indexer.example/new"},
+            SimpleNamespace(provider="nzb.life"),
+            pubdate,
+            datetime(2024, 2, 1),
+        )
+
+        assert existing.latest_url == "http://indexer.example/old"
+        assert existing.download_status == DownloadStatus.DISCOVERED
+
+    def test_older_hit_does_not_replace_a_failed_url(self, issue_discovery_service):
+        existing = self._issue(DownloadStatus.FAILED, pubdate=datetime(2024, 2, 1))
+
+        issue_discovery_service._update_existing_issue(
+            existing,
+            {"url": "http://indexer.example/older"},
+            SimpleNamespace(provider="nzb.life"),
+            datetime(2024, 1, 1),
+            datetime(2024, 3, 1),
+        )
+
+        assert existing.latest_url == "http://indexer.example/old"
+        assert existing.latest_pubdate == datetime(2024, 2, 1)
+        assert existing.download_status == DownloadStatus.DISCOVERED
+
+    def test_permanently_failed_keeps_url_and_status(self, issue_discovery_service):
+        existing = self._issue(DownloadStatus.PERMANENTLY_FAILED)
+
+        issue_discovery_service._update_existing_issue(
+            existing,
+            {"url": "http://indexer.example/new"},
+            SimpleNamespace(provider="nzb.life"),
+            existing.latest_pubdate,
+            datetime(2024, 2, 1),
+        )
+
+        assert existing.latest_url == "http://indexer.example/old"
+        assert existing.download_status == DownloadStatus.PERMANENTLY_FAILED

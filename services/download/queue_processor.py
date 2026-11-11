@@ -9,10 +9,31 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from core.interfaces import DownloadClient
-from models.database import DownloadSubmission, PeriodicalTracking
+from models.database import DiscoveredIssue, DownloadStatus, DownloadSubmission, PeriodicalTracking
+from services.cache.provider_cache import NzbContentRejected
 from services.download.nzb_submit import submit_with_nzb_content
 
 logger = logging.getLogger(__name__)
+
+
+def release_linked_issue(session: Session, submission: DownloadSubmission, error: str) -> None:
+    """Move a queued issue back to failed when its submission never reached the client.
+
+    Does not increment attempt_count. An indexer error page is not a download
+    attempt, and counting it permanently fails the issue.
+    """
+    issue = session.query(DiscoveredIssue).filter(DiscoveredIssue.current_submission_id == submission.id).first()
+    if issue is None:
+        return
+    if issue.download_status not in (
+        DownloadStatus.QUEUED,
+        DownloadStatus.PENDING,
+        DownloadStatus.DOWNLOADING,
+    ):
+        return
+    issue.download_status = DownloadStatus.FAILED
+    issue.last_error = error[:512]
+    issue.current_submission_id = None
 
 
 class QueueProcessor:
@@ -146,13 +167,24 @@ class QueueProcessor:
                     f"(submission_id: {submission.id}, category: {category}, client: {client.name})"
                 )
 
-                job_id = submit_with_nzb_content(
-                    client=client,
-                    nzb_url=submission.source_url,
-                    title=submission.result_title,
-                    category=category,
-                    nzb_cache_service=self.nzb_cache_service,
-                )
+                try:
+                    job_id = submit_with_nzb_content(
+                        client=client,
+                        nzb_url=submission.source_url,
+                        title=submission.result_title,
+                        category=category,
+                        nzb_cache_service=self.nzb_cache_service,
+                    )
+                except NzbContentRejected as exc:
+                    message = f"Indexer did not return an NZB: {exc}"
+                    logger.warning(f"{message} ({submission.result_title})")
+                    submission.status = DownloadSubmission.StatusEnum.FAILED
+                    submission.last_error = message[:512]
+                    submission.client_name = client.name
+                    release_linked_issue(session, submission, message)
+                    session.commit()
+                    errors.append(f"Submission {submission.id}: {message}")
+                    continue
 
                 if not job_id:
                     logger.warning(

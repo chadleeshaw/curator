@@ -43,7 +43,7 @@ from core.constants.internet_archive import (
     IA_DOWNLOAD_RESUME_ENABLED,
     IA_PART_META_EXTENSION,
 )
-from core.constants.files import SUPPORTED_FILE_EXTENSIONS
+from core.constants.files import COLLECTION_PATH_SEPARATOR, SUPPORTED_FILE_EXTENSIONS, split_collection_paths
 from core.interfaces import DownloadClient
 from core.utils.internet_archive import safe_ia_call
 
@@ -71,7 +71,7 @@ class DownloadJob:  # pylint: disable=too-many-instance-attributes
         self.prefer_collection = prefer_collection  # Prefer ZIP/TAR collection formats
         self.status = IA_STATUS_PENDING
         self.progress = 0
-        self.file_path: Optional[str] = None  # Single file or comma-separated list for collections
+        self.file_path: Optional[str] = None  # Single file, or newline-joined paths for a collection
         self.error: Optional[str] = None
         self.expected_size = 0
         self.downloaded_size = 0
@@ -715,8 +715,8 @@ class InternetArchiveClient(DownloadClient):
                             extracted_files = self._extract_archive(dest_file, self.downloads_dir)
 
                             if extracted_files:
-                                # Store list of extracted files (comma-separated for compatibility)
-                                job.file_path = ",".join(str(f) for f in extracted_files)
+                                # Newline, not comma: titles contain commas.
+                                job.file_path = COLLECTION_PATH_SEPARATOR.join(str(f) for f in extracted_files)
                                 job.extracted_count = len(extracted_files)
                                 logger.info(f"[{self.name}] Extracted {len(extracted_files)} files from collection")
                             else:
@@ -849,15 +849,13 @@ class InternetArchiveClient(DownloadClient):
         with self._jobs_lock:
             for job_id, job in self._jobs.items():
                 if job.status == IA_STATUS_COMPLETED and job.file_path:
-                    # Check if this was a collection with multiple extracted files
-                    if job.extracted_count > 0 and "," in job.file_path:
-                        # Return each extracted file as a separate completed download
-                        file_paths = job.file_path.split(",")
+                    file_paths = split_collection_paths(job.file_path) if job.extracted_count > 0 else None
+                    if file_paths:
                         for i, file_path in enumerate(file_paths):
                             completed.append(
                                 {
                                     "job_id": f"{job_id}_{i}",
-                                    "file_path": file_path.strip(),
+                                    "file_path": file_path,
                                     "title": job.title,
                                     "is_collection_item": True,
                                     "collection_job_id": job_id,
