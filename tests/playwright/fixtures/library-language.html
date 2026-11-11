@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Library language</title>
+  </head>
+  <body>
+    <select id="library-language-filter">
+      <option value="all">All</option>
+    </select>
+    <select id="library-category-filter">
+      <option value="all">All</option>
+    </select>
+    <input id="library-search-input" type="search" />
+    <div id="periodicals-grid"></div>
+    <script type="module">
+      import { library } from '/static/js/features/library.js';
+      window.__library = library;
+    </script>
+  </body>
+</html>

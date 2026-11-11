@@ -33,6 +33,11 @@ router = _shared.router
 logger = _shared.logger
 
 
+def _library_language_expr():
+    """Blank and missing languages count as English, matching the library filter."""
+    return func.coalesce(func.nullif(func.trim(Periodical.language), ""), "English")
+
+
 class PeriodicalQueryBuilder:
     """
     Constructs queries to find the latest periodical issue per tracking group.
@@ -61,7 +66,7 @@ class PeriodicalQueryBuilder:
         )
 
     def _build_language_expression(self):
-        return func.coalesce(Periodical.language, "English")
+        return _library_language_expr()
 
     def _build_date_subquery(self):
         if self._date_subquery is None:
@@ -429,17 +434,14 @@ async def get_languages(_username: str = Depends(get_verify_token)) -> Dict[str,
     """
 
     def operation(db):
-        from sqlalchemy import func
-
-        # Query for unique languages with counts
-        # Use COALESCE to handle NULL languages as "English"
+        language_expr = _library_language_expr()
         language_counts = (
             db.query(
-                func.coalesce(Periodical.language, "English").label("language"),
+                language_expr.label("language"),
                 func.count(Periodical.id).label("count"),  # pylint: disable=not-callable
             )
-            .group_by("language")
-            .order_by("language")
+            .group_by(language_expr)
+            .order_by(language_expr)
             .all()
         )
 

@@ -368,7 +368,7 @@ export class LibraryManager {
     // Use filterManager to apply filters - search matches periodical title or stack name
     const filtered = this.filterManager.applyFilters(this.allPeriodicals, {
       getCategoryFn: (p) => p.metadata?.category || 'Unknown',
-      getLanguageFn: (p) => p.language || 'English',
+      getLanguageFn: (p) => (p.language || '').trim() || 'English',
       getTitleFn: (p) => {
         const title = p.title || '';
         if (p.stack_id) {
@@ -379,36 +379,37 @@ export class LibraryManager {
       },
     });
 
-    // Determine if user is actively searching
-    const isSearching =
-      this.filterManager.searchQuery && this.filterManager.searchQuery.trim() !== '';
+    // Search and a chosen language both show the periodicals inside a stack.
+    const searchQuery = (this.filterManager.searchQuery || '').trim();
+    const selectedLanguage = (this.filterManager.languageFilter || '').trim();
+    const isSearching = searchQuery !== '';
+    const isLanguageFiltered = selectedLanguage !== '' && selectedLanguage !== 'all';
 
     // Separate items into stacked and ungrouped
     const stackMap = new Map(); // stack_id -> { stack, items: [] }
     const ungrouped = [];
 
-    if (isSearching) {
-      // When searching, show individual items (not grouped into stack cards)
-      // so users can see exactly which item matched. Stack badge on each card
-      // shows which stack it belongs to via the stackLookup parameter.
-      const query = this.filterManager.searchQuery.toLowerCase().trim();
-
-      // Add all filtered items as individual cards
+    if (isSearching || isLanguageFiltered) {
+      // Show individual items (not grouped into stack cards) so the grid is
+      // one level down: the periodicals, with a stack badge when they belong
+      // to one. A text search also includes members of a stack whose name matches.
       filtered.forEach((periodical) => ungrouped.push(periodical));
 
-      // Also include members of stacks whose name matches the search
-      const filteredIds = new Set(filtered.map((p) => p.id));
-      this.allStacks.forEach((stack) => {
-        if ((stack.name || '').toLowerCase().includes(query)) {
-          const members = this.allPeriodicals.filter(
-            (p) => p.stack_id === stack.id && !filteredIds.has(p.id)
-          );
-          members.forEach((m) => {
-            ungrouped.push(m);
-            filteredIds.add(m.id);
-          });
-        }
-      });
+      if (isSearching) {
+        const query = searchQuery.toLowerCase();
+        const filteredIds = new Set(filtered.map((p) => p.id));
+        this.allStacks.forEach((stack) => {
+          if ((stack.name || '').toLowerCase().includes(query)) {
+            const members = this.allPeriodicals.filter(
+              (p) => p.stack_id === stack.id && !filteredIds.has(p.id)
+            );
+            members.forEach((m) => {
+              ungrouped.push(m);
+              filteredIds.add(m.id);
+            });
+          }
+        });
+      }
     } else {
       // Normal browsing: group stacked items into stack cards
       filtered.forEach((periodical) => {
@@ -545,16 +546,29 @@ export class LibraryManager {
         // Keep the "All" option
         dropdown.innerHTML = '<option value="all">All</option>';
 
-        // Add each language as an option with count
+        // Blank languages are English. Merge their counts so the menu never
+        // shows a nameless "(3)".
+        const counts = new Map();
         data.languages.forEach(({ language, count }) => {
-          const option = document.createElement('option');
-          option.value = language;
-          option.textContent = `${language} (${count})`;
-          dropdown.appendChild(option);
+          const name = (language || '').trim() || 'English';
+          counts.set(name, (counts.get(name) || 0) + count);
         });
 
-        // Restore saved selection
-        dropdown.value = this.filterManager.languageFilter;
+        [...counts.keys()]
+          .sort((left, right) => left.localeCompare(right))
+          .forEach((language) => {
+            const option = document.createElement('option');
+            option.value = language;
+            option.textContent = `${language} (${counts.get(language)})`;
+            dropdown.appendChild(option);
+          });
+
+        const selected = (this.filterManager.languageFilter || '').trim() || 'all';
+        const hasSelected = [...dropdown.options].some((option) => option.value === selected);
+        dropdown.value = hasSelected ? selected : 'all';
+        if (!hasSelected) {
+          this.filterManager.languageFilter = 'all';
+        }
       } else {
         console.warn('[Library] Failed to load languages from API');
       }
