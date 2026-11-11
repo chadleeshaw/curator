@@ -35,6 +35,9 @@ class NzbContentRejected(Exception):
     """
 
 
+INDEXER_REJECTION_ERROR = "Indexer did not return an NZB"
+
+
 def is_nzb_xml(content: Optional[str]) -> bool:
     """Return True when the body looks like an NZB document."""
     return bool(content) and "<nzb" in content.lower()
@@ -220,6 +223,11 @@ class NzbCacheService:
                 return nzb_content
 
             return nzb_content
+
+        except httpx.HTTPStatusError as exc:
+            status_code = getattr(exc.response, "status_code", "error")
+            logger.warning(f"Indexer returned HTTP {status_code} from {_url_for_log(download_url)}")
+            raise NzbContentRejected(f"HTTP {status_code}") from exc
 
         except httpx.HTTPError as e:
             logger.error(f"Failed to fetch NZB from {_url_for_log(download_url)}: {e}")

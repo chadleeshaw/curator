@@ -47,6 +47,13 @@ def _has_collection_indicators(title: str) -> bool:
     return any(indicator in title_lower for indicator in COLLECTION_INDICATOR_WORDS)
 
 
+def _indicator_in_title(title_lower: str, indicator: str) -> bool:
+    """Match short words as whole words. "no" must not match inside "notes"."""
+    if indicator.isalpha() and len(indicator) <= 3:
+        return re.search(rf"\b{re.escape(indicator)}\b", title_lower) is not None
+    return indicator in title_lower
+
+
 def _has_periodical_indicators(title: str) -> bool:
     """
     Return True if the title contains at least one signal that it is a single
@@ -56,7 +63,7 @@ def _has_periodical_indicators(title: str) -> bool:
     """
     title_lower = title.lower()
 
-    if any(indicator in title_lower for indicator in PERIODICAL_INDICATOR_WORDS):
+    if any(_indicator_in_title(title_lower, indicator) for indicator in PERIODICAL_INDICATOR_WORDS):
         return True
 
     if _SINGLE_YEAR_RE.search(title_lower) and not _has_year_range(title):
@@ -86,6 +93,22 @@ def _is_non_periodical(title: str, allow_collections: bool = False) -> bool:
         return True
 
     return any(keyword in title_lower for keyword in NON_PERIODICAL_KEYWORDS)
+
+
+def _next_word_is_different_publication(title: str, term: str) -> bool:
+    """True when the word right after the name is a different publication.
+
+    "Forbes Times" is not "Forbes". "Time Magazine Weekly Edition" still is
+    "Time", because "magazine" sits between the name and "weekly".
+    """
+    words = title.split()
+    try:
+        index = words.index(term.lower())
+    except ValueError:
+        return False
+    if index + 1 >= len(words):
+        return False
+    return words[index + 1] in PERIODICAL_MODIFIERS
 
 
 def _has_periodical_modifier(title: str, query_term: str) -> tuple[bool, Optional[str]]:
@@ -167,10 +190,10 @@ def title_contains_name(result_title: str, names: Iterable[str]) -> bool:
         required = words[:1] + [w for w in words[1:] if w not in _GENERIC_NAME_WORDS]
         if not required or not all(re.search(_build_word_boundary_pattern(w), normalized_title) for w in required):
             continue
-        if len(words) == 1:
-            has_modifier, _modifier = _has_periodical_modifier(normalized_title, words[0])
-            if has_modifier or not _has_periodical_indicators(normalized_title):
-                continue
+        if len(required) == 1 and _next_word_is_different_publication(normalized_title, required[0]):
+            continue
+        if len(words) == 1 and not _has_periodical_indicators(normalized_title):
+            continue
         return True
     return False
 

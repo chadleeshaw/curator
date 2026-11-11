@@ -14,12 +14,12 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
-from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
+from services.cache.provider_cache import INDEXER_REJECTION_ERROR
 from core.constants.app import (
     MAX_DOWNLOAD_RETRIES_IA,
     MAX_ERROR_LENGTH,
@@ -51,6 +51,13 @@ _NEW_ISSUE_DAYS = 7
 _RECENT_ISSUE_DAYS = 30
 _MODERATE_ISSUE_DAYS = 90
 _TRACKING_PRIORITY_BOOST = 10
+
+
+def _as_date(value):
+    """Calendar date for a datetime or date. Neighboring months stay distinct."""
+    if isinstance(value, datetime):
+        return value.date()
+    return value
 
 
 class IssueDiscoveryService:
@@ -487,6 +494,7 @@ class IssueDiscoveryService:
         now = utc_now()
         issue.attempt_count += 1
         issue.last_attempt = now
+        issue.current_submission_id = None
         if len(error_message) > MAX_ERROR_LENGTH:
             logger.warning(
                 f"Error message truncated from {len(error_message)} to {MAX_ERROR_LENGTH} chars for issue {issue_id}"
@@ -528,8 +536,17 @@ class IssueDiscoveryService:
         Returns:
             List of DiscoveredIssue objects ready for download
         """
+        # An indexer rejection stays failed until a search replaces the URL.
+        # Putting it back on the queue resubmits the same dead link.
+        indexer_rejection = DiscoveredIssue.last_error.like(f"{INDEXER_REJECTION_ERROR}%")
         query = session.query(DiscoveredIssue).filter(
-            DiscoveredIssue.download_status.in_([DownloadStatus.WANTED, DownloadStatus.FAILED])
+            or_(
+                DiscoveredIssue.download_status == DownloadStatus.WANTED,
+                and_(
+                    DiscoveredIssue.download_status == DownloadStatus.FAILED,
+                    or_(DiscoveredIssue.last_error.is_(None), ~indexer_rejection),
+                ),
+            )
         )
 
         if tracking_id:
@@ -817,14 +834,16 @@ class IssueDiscoveryService:
         if not existing:
             return None
 
-        # Primary: fuzzy date matching (when issue has a date)
+        # Same calendar month only. A one-month tolerance treats the next
+        # issue as a copy of the one already in the library.
         if issue.issue_date:
-            issue_date_only = issue.issue_date.date()
+            issue_day = _as_date(issue.issue_date)
             for mag in existing:
-                if mag.issue_date and dates_are_fuzzy_match(mag.issue_date.date(), issue_date_only):
-                    logger.debug(
-                        f"Fuzzy date match found: library {mag.issue_date.date()} matches search {issue_date_only}"
-                    )
+                if not mag.issue_date:
+                    continue
+                owned_day = _as_date(mag.issue_date)
+                if owned_day.year == issue_day.year and owned_day.month == issue_day.month:
+                    logger.debug(f"Library already has {owned_day.year}-{owned_day.month:02d}: {issue.title}")
                     return mag.id
 
         # Fallback: match by fuzzy group ID against all library items (including dateless ones)

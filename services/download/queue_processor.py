@@ -9,18 +9,25 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from core.interfaces import DownloadClient
+from core.parsers import utc_now
 from models.database import DiscoveredIssue, DownloadStatus, DownloadSubmission, PeriodicalTracking
-from services.cache.provider_cache import NzbContentRejected
+from services.cache.provider_cache import INDEXER_REJECTION_ERROR, NzbContentRejected
 from services.download.nzb_submit import submit_with_nzb_content
 
 logger = logging.getLogger(__name__)
 
 
-def release_linked_issue(session: Session, submission: DownloadSubmission, error: str) -> None:
+def release_linked_issue(
+    session: Session,
+    submission: DownloadSubmission,
+    error: str,
+    *,
+    count_attempt: bool = False,
+) -> None:
     """Move a queued issue back to failed when its submission never reached the client.
 
-    Does not increment attempt_count. An indexer error page is not a download
-    attempt, and counting it permanently fails the issue.
+    Indexer error pages do not count as an attempt. A client rejection does,
+    and past max_retries it is permanently failed instead of left queued.
     """
     issue = session.query(DiscoveredIssue).filter(DiscoveredIssue.current_submission_id == submission.id).first()
     if issue is None:
@@ -31,9 +38,17 @@ def release_linked_issue(session: Session, submission: DownloadSubmission, error
         DownloadStatus.DOWNLOADING,
     ):
         return
-    issue.download_status = DownloadStatus.FAILED
     issue.last_error = error[:512]
     issue.current_submission_id = None
+    if count_attempt:
+        issue.attempt_count = (issue.attempt_count or 0) + 1
+        issue.last_attempt = utc_now()
+        max_retries = issue.max_retries if issue.max_retries is not None else 1
+        if issue.attempt_count > max_retries:
+            issue.download_status = DownloadStatus.PERMANENTLY_FAILED
+            issue.download_priority = 0
+            return
+    issue.download_status = DownloadStatus.FAILED
 
 
 class QueueProcessor:
@@ -82,6 +97,23 @@ class QueueProcessor:
                     return client
             logger.debug(f"Client '{submission.client_name}' not found for submission {submission.id}, using default")
         return self.download_client
+
+    def _fail_unsent_submission(
+        self,
+        session: Session,
+        submission: DownloadSubmission,
+        message: str,
+        client_name: Optional[str] = None,
+        *,
+        count_attempt: bool = True,
+    ) -> None:
+        """Fail a submission that never got a job id, and free the linked issue."""
+        submission.status = DownloadSubmission.StatusEnum.FAILED
+        submission.last_error = message[:512]
+        if client_name:
+            submission.client_name = client_name
+        release_linked_issue(session, submission, message, count_attempt=count_attempt)
+        session.commit()
 
     def process_queue(self, session: Session) -> Dict[str, Any]:
         """
@@ -149,10 +181,9 @@ class QueueProcessor:
                 tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
 
                 if not tracking:
+                    message = "Tracking record not found"
                     logger.error(f"Tracking {submission.tracking_id} not found for submission {submission.id}")
-                    submission.status = DownloadSubmission.StatusEnum.FAILED
-                    submission.last_error = "Tracking record not found"
-                    session.commit()
+                    self._fail_unsent_submission(session, submission, message)
                     errors.append(f"Submission {submission.id}: Tracking not found")
                     continue
 
@@ -176,25 +207,19 @@ class QueueProcessor:
                         nzb_cache_service=self.nzb_cache_service,
                     )
                 except NzbContentRejected as exc:
-                    message = f"Indexer did not return an NZB: {exc}"
+                    message = f"{INDEXER_REJECTION_ERROR}: {exc}"
                     logger.warning(f"{message} ({submission.result_title})")
-                    submission.status = DownloadSubmission.StatusEnum.FAILED
-                    submission.last_error = message[:512]
-                    submission.client_name = client.name
-                    release_linked_issue(session, submission, message)
-                    session.commit()
+                    self._fail_unsent_submission(session, submission, message, client.name, count_attempt=False)
                     errors.append(f"Submission {submission.id}: {message}")
                     continue
 
                 if not job_id:
+                    message = "Download client rejected submission (no job ID returned)"
                     logger.warning(
                         f"Download client rejected submission: {submission.result_title} "
                         f"(submission_id: {submission.id})"
                     )
-                    submission.status = DownloadSubmission.StatusEnum.FAILED
-                    submission.last_error = "Download client rejected submission (no job ID returned)"
-                    submission.client_name = client.name
-                    session.commit()
+                    self._fail_unsent_submission(session, submission, message, client.name)
                     errors.append(f"Submission {submission.id}: Client rejected (no job ID)")
                     continue
 
@@ -216,9 +241,7 @@ class QueueProcessor:
                     f"Failed to submit queued download {submission.id}: {e}",
                     exc_info=True,
                 )
-                submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = str(e)
-                session.commit()
+                self._fail_unsent_submission(session, submission, str(e))
                 errors.append(f"Submission {submission.id}: {str(e)}")
                 continue
 

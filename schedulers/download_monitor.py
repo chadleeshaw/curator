@@ -622,6 +622,7 @@ class DownloadMonitor:
             )
             submission.attempt_count += 1
             session.commit()
+            self._sync_discovered_issue_status(submission, DownloadStatus.FAILED, None, session)
             return None
 
         except Exception as e:
@@ -633,6 +634,7 @@ class DownloadMonitor:
             submission.last_error = f"Recovery attempt failed: {str(e)}"
             submission.attempt_count += 1
             session.commit()
+            self._sync_discovered_issue_status(submission, DownloadStatus.FAILED, None, session)
             return None
 
     def _should_delete_from_client(self, tracking_id: Optional[int], session: Session) -> bool:

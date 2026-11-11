@@ -624,12 +624,17 @@ class OCRQueueService:
             if outcome == "timeout":
                 if png_path.exists():
                     png_path.unlink(missing_ok=True)
-                logger.info(f"OCR image generation timed out for periodical {periodical.id}; will retry")
                 db.expire(job)
                 job = db.query(OCRJob).filter(OCRJob.id == job.id).first()
                 if job:
+                    job.attempt_count = (job.attempt_count or 0) + 1
                     job.last_error = "OCR image generation timed out"
-                    _safe_commit(db, f"keep job {job.id} pending after image timeout")
+                    if job.attempt_count >= max_retries:
+                        job.status = OCRJob.StatusEnum.FAILED
+                        logger.info(f"OCR image generation timed out for periodical {periodical.id}; giving up")
+                    else:
+                        logger.info(f"OCR image generation timed out for periodical {periodical.id}; will retry")
+                    _safe_commit(db, f"record image timeout for job {job.id}")
                 stats["skipped"] += 1
                 continue
 

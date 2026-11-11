@@ -77,7 +77,7 @@ class TestNzbContentRejected:
         finally:
             session.close()
 
-    def test_http_error_still_returns_none(self, tmp_path):
+    def test_http_status_error_is_rejected(self, tmp_path):
         service = NzbCacheService(cache_db_path=str(tmp_path / "cache.db"))
         response = _response("")
         response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -87,7 +87,8 @@ class TestNzbContentRejected:
         )
 
         with patch("services.cache.provider_cache.httpx.get", return_value=response):
-            assert service.get_nzb_content(DOWNLOAD_URL) is None
+            with pytest.raises(NzbContentRejected, match="HTTP 404"):
+                service.get_nzb_content(DOWNLOAD_URL)
 
     def test_submit_does_not_fall_back_to_the_url(self):
         client = _ContentClient()

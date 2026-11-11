@@ -30,7 +30,7 @@ from models.database import (
     SearchResult,
 )
 from services.cache.feed_sync import FeedSyncService
-from services.cache.provider_cache import NzbCacheService
+from services.cache.provider_cache import NzbCacheService, NzbContentRejected
 
 
 # =============================================================================
@@ -393,7 +393,5 @@ class TestNzbProviderRedirects:
         )
 
         with patch("services.cache.provider_cache.httpx.get", return_value=mock_response):
-            result = service.get_nzb_content("http://prowlarr.local/1/download?apikey=abc&link=missing")
-
-        # On HTTP error, get_nzb_content returns None (logged as error, not re-raised)
-        assert result is None
+            with pytest.raises(NzbContentRejected, match="HTTP 404"):
+                service.get_nzb_content("http://prowlarr.local/1/download?apikey=abc&link=missing")

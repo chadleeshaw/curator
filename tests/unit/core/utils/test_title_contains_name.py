@@ -25,7 +25,10 @@ from core.utils.result_filter import title_contains_name
         ("Club March 2024", ["Club"], True),
         ("Club Picnic", ["Club"], False),
         ("Club Times March 2024", ["Club"], False),
+        ("Club Notes Picnic", ["Club"], False),
         ("Show.mkv", ["Show"], False),
+        # generic words do not turn "Name Magazine" into a different publication
+        ("Forbes Times March 2024", ["Forbes Magazine"], False),
     ],
 )
 def test_title_contains_name(title, names, expected):

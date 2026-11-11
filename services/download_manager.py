@@ -31,6 +31,7 @@ from models.database import (
     PeriodicalTracking,
 )
 from models.database import SearchResult as DBSearchResult
+from services.cache.provider_cache import INDEXER_REJECTION_ERROR, NzbContentRejected
 from services.download import (
     SearchService,
     DeduplicationService,
@@ -912,11 +913,9 @@ class DownloadManager:
             )
 
             if not job_id:
-                logger.warning(f"Download client {client.name} rejected submission: {issue.title}")
-                issue.download_status = DownloadStatus.FAILED
-                issue.last_error = f"Client {client.name} rejected submission"
-                self._record_attempt(issue)
-                session.commit()
+                message = f"Client {client.name} rejected submission"
+                logger.warning(f"{message}: {issue.title}")
+                self.issue_discovery_service.handle_download_failure(issue.id, message, session)
                 return None
 
             # Create submission record
@@ -930,29 +929,32 @@ class DownloadManager:
                 attempt_count=1,
             )
 
-            # Update DiscoveredIssue with submission info
+            # Update DiscoveredIssue with submission info. The attempt counter
+            # moves when the client reports a failure, not when it accepts the job.
             issue.download_status = DownloadStatus.PENDING  # Submitted to and accepted by download client
             issue.current_submission_id = submission.id
             self._register_submission_id(issue, submission.id)
-            self._record_attempt(issue)
 
             session.commit()
 
             logger.info(f"Submitted discovered issue: {issue.title} (job_id: {job_id}, submission_id: {submission.id})")
             return submission
 
+        except NzbContentRejected as exc:
+            message = f"{INDEXER_REJECTION_ERROR}: {exc}"
+            logger.warning(f"{message} ({issue.title})")
+            issue.download_status = DownloadStatus.FAILED
+            issue.last_error = message[:MAX_ERROR_LENGTH]
+            issue.current_submission_id = None
+            session.commit()
+            return None
+
         except Exception as e:
             logger.error(
                 f"Error submitting discovered issue '{issue.title}': {e}",
                 exc_info=True,
             )
-            issue.download_status = DownloadStatus.FAILED
-            error_str = str(e)
-            if len(error_str) > MAX_ERROR_LENGTH:
-                logger.warning(f"Error message truncated from {len(error_str)} to {MAX_ERROR_LENGTH} chars")
-            issue.last_error = error_str[:MAX_ERROR_LENGTH]
-            self._record_attempt(issue)
-            session.commit()
+            self.issue_discovery_service.handle_download_failure(issue.id, str(e), session)
             return None
 
     def submit_from_discovered_issue(self, discovered_issue_id: int, session: Session) -> Optional[DownloadSubmission]:
