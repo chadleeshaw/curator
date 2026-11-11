@@ -996,6 +996,191 @@ class TestImportRetry:
         session.close()
 
     @pytest.mark.asyncio
+    async def test_exhausted_import_retry_removes_client_history(
+        self, test_db, tmp_path, download_manager, mock_file_importer
+    ):
+        """The last failed import removes the download-client history entry."""
+        from core.constants.app import MAX_IMPORT_RETRIES
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = PeriodicalTracking(olid="OL-exhaust-delete", title="Harbor News", language="English", user_id=1)
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        test_file = downloads_dir / "Harbor News.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest")
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Harbor News",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(test_file),
+            last_error="Import/processing failed",
+            attempt_count=MAX_IMPORT_RETRIES - 1,
+            job_id="nzo-exhaust",
+            client_name="SABnzbd",
+            user_id=1,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+        monitor._process_single_file = Mock(return_value=False)
+        monitor._delete_from_client = Mock()
+
+        assert monitor._retry_failed_imports(session) == 0
+        monitor._delete_from_client.assert_called_once_with("nzo-exhaust", "import failed", "SABnzbd")
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_keeps_client_history_while_retries_remain(
+        self, test_db, tmp_path, download_manager, mock_file_importer
+    ):
+        """An import that can still be retried leaves the client history entry."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = PeriodicalTracking(olid="OL-retry-keep", title="City Paper", language="English", user_id=1)
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        test_file = downloads_dir / "City Paper.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest")
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="City Paper",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(test_file),
+            last_error="Import/processing failed",
+            attempt_count=0,
+            job_id="nzo-keep",
+            client_name="SABnzbd",
+            user_id=1,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+        monitor._process_single_file = Mock(return_value=False)
+        monitor._delete_from_client = Mock()
+
+        assert monitor._retry_failed_imports(session) == 0
+        monitor._delete_from_client.assert_not_called()
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_missing_file_removes_client_history(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """A completed download whose file is gone is removed from the client."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = PeriodicalTracking(
+            olid="OL-missing-delete",
+            title="Field Notes",
+            language="English",
+            user_id=1,
+            delete_from_client_on_completion=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Field Notes",
+            status=DownloadSubmission.StatusEnum.COMPLETED,
+            file_path=str(downloads_dir / "missing.pdf"),
+            job_id="nzo-missing",
+            client_name="SABnzbd",
+            user_id=1,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+        monitor._delete_from_client = Mock()
+
+        monitor._process_completed_downloads(session)
+
+        monitor._delete_from_client.assert_called_once_with("nzo-missing", "file missing", "SABnzbd")
+        session.refresh(submission)
+        assert submission.status == DownloadSubmission.StatusEnum.FAILED
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_kept_history_is_not_removed_when_file_is_missing(
+        self, test_db, tmp_path, download_manager, mock_file_importer
+    ):
+        """Keep-history tracking leaves the client entry when the file is gone."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = PeriodicalTracking(
+            olid="OL-keep-history",
+            title="Town Gazette",
+            language="English",
+            user_id=1,
+            delete_from_client_on_completion=False,
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Town Gazette",
+            status=DownloadSubmission.StatusEnum.COMPLETED,
+            file_path=str(downloads_dir / "missing.pdf"),
+            job_id="nzo-keep-history",
+            client_name="SABnzbd",
+            user_id=1,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+        monitor._delete_from_client = Mock()
+
+        monitor._process_completed_downloads(session)
+
+        monitor._delete_from_client.assert_not_called()
+        session.close()
+
+    @pytest.mark.asyncio
     async def test_retry_does_not_pick_up_download_failures(
         self, test_db, tmp_path, download_manager, mock_file_importer
     ):

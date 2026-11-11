@@ -427,6 +427,8 @@ class DownloadMonitor:
                     submission.attempt_count += 1
                     session.commit()
                     logger.debug(f"[DownloadMonitor] Import retry skipped: file gone for submission {submission.id}")
+                    if submission.attempt_count >= MAX_IMPORT_RETRIES:
+                        self._delete_finished_client_job(submission, "file missing", session)
                     continue
 
                 logger.info(
@@ -458,11 +460,13 @@ class DownloadMonitor:
                             f"[DownloadMonitor] Import retry exhausted for submission {submission.id}: "
                             f"{file_path.name} ({MAX_IMPORT_RETRIES} attempts)"
                         )
+                        session.commit()
+                        self._delete_finished_client_job(submission, "import failed", session)
                     else:
                         submission.last_error = (
                             f"Import/processing failed (attempt {submission.attempt_count}/{MAX_IMPORT_RETRIES})"
                         )
-                    session.commit()
+                        session.commit()
 
         except Exception as e:
             logger.error(f"[DownloadMonitor] Error in import retry: {e}", exc_info=True)
@@ -658,6 +662,11 @@ class DownloadMonitor:
 
         return tracking.delete_from_client_on_completion
 
+    def _delete_finished_client_job(self, submission: DownloadSubmission, reason: str, session: Session) -> None:
+        """Remove a finished job from the download client when tracking allows it."""
+        if submission.job_id and self._should_delete_from_client(submission.tracking_id, session):
+            self._delete_from_client(submission.job_id, reason, submission.client_name)
+
     def _delete_from_client(self, job_id: str, reason: str, client_name: Optional[str] = None) -> None:
         """
         Delete a job from the download client.
@@ -816,6 +825,7 @@ class DownloadMonitor:
                 submission.status = DownloadSubmission.StatusEnum.FAILED
                 submission.last_error = f"File not found in downloads directory: {Path(submission.file_path).name} (searched: {self.downloads_dir})"
                 session.commit()
+                self._delete_finished_client_job(submission, "file missing", session)
                 continue
 
             logger.debug(f"[DownloadMonitor] Found file at: {file_path}")
