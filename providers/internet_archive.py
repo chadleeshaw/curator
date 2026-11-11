@@ -342,8 +342,9 @@ class InternetArchiveProvider(SearchProvider):
         sort = self.sort if query else "-addeddate"
 
         # Search via API
+        label = f"'{query}'" if query else "the feed poll"
         if self._check_rate_limit():
-            logger.warning(f"[{self.name}] Skipping API search for '{query}' - rate limited")
+            logger.warning(f"[{self.name}] Skipping API search for {label} - rate limited")
             return []
 
         try:
@@ -363,8 +364,8 @@ class InternetArchiveProvider(SearchProvider):
                         params={"rows": self.max_results},
                     )
 
-                results = self._process_search_results(search_results, query)
-                logger.info(f"[{self.name}] Collection search found {len(results)} results for '{query}'")
+                results, skipped, page_full = self._process_search_results(search_results)
+                self._log_search_outcome(query, "Collection", len(results), skipped, page_full)
 
             # Tier 2: If zero results, search all texts without collection filter
             # (never for feed sync: an unfiltered "newest texts" query matches nothing we track)
@@ -386,32 +387,48 @@ class InternetArchiveProvider(SearchProvider):
                         sorts=[sort],
                         params={"rows": self.max_results},
                     )
-                results = self._process_search_results(search_results_broad, query)
-                logger.info(f"[{self.name}] General search found {len(results)} results for '{query}'")
+                results, skipped, page_full = self._process_search_results(search_results_broad)
+                self._log_search_outcome(query, "General", len(results), skipped, page_full)
 
         except Exception as e:
-            logger.error(f"[{self.name}] Search error for '{query}': {e}", exc_info=True)
+            logger.error(f"[{self.name}] Search error for {label}: {e}", exc_info=True)
 
         return results
 
-    def _process_search_results(self, search_results, query: str) -> List[SearchResult]:
+    def _log_search_outcome(self, query: str, scope: str, count: int, skipped: int, page_full: bool) -> None:
+        """One info line for a search. An empty query is the feed poll, not a title."""
+        noun = "result" if count == 1 else "results"
+        if query:
+            message = f"[{self.name}] {scope} search for '{query}': {count} {noun}"
+        else:
+            message = f"[{self.name}] Feed poll of configured collections: {count} newest {noun}"
+        if page_full:
+            message += f" (stopped at the {self.max_results}-row cap)"
+        if skipped:
+            skipped_noun = "item" if skipped == 1 else "items"
+            message += f", skipped {skipped} {skipped_noun} without a preferred format"
+        logger.info(message)
+
+    def _process_search_results(self, search_results) -> tuple[List[SearchResult], int, bool]:
         """
         Process search results from Internet Archive.
 
         Args:
             search_results: Iterator of search results from IA API
-            query: Original search query (for logging)
 
         Returns:
-            List of SearchResult objects
+            Kept results, how many items lacked a preferred format, and whether
+            the page was full.
         """
         results = []
         result_count = 0
         skipped_no_format = 0
+        seen = 0
 
         for item in search_results:
-            if result_count >= self.max_results:
+            if seen >= self.max_results:
                 break
+            seen += 1
             try:
                 identifier = item.get("identifier")
                 if not identifier:
@@ -490,15 +507,8 @@ class InternetArchiveProvider(SearchProvider):
                 logger.warning(f"[{self.name}] Error parsing search result: {e}")
                 continue
 
-        if skipped_no_format > 0:
-            logger.info(
-                f"[{self.name}] Found {len(results)} results for '{query}' "
-                f"(skipped {skipped_no_format} items without preferred formats)"
-            )
-        else:
-            logger.info(f"[{self.name}] Found {len(results)} results for '{query}'")
-
-        return results
+        page_full = seen >= self.max_results or result_count >= self.max_results
+        return results, skipped_no_format, page_full
 
     def get_item_download_info(self, identifier: str) -> Optional[Dict[str, Any]]:
         """

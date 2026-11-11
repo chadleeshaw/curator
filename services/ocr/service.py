@@ -9,17 +9,12 @@ from pathlib import Path
 from typing import Optional, Dict, List, Any
 
 try:
-    import fitz  # PyMuPDF
+    import pymupdf
 
     PYMUPDF_AVAILABLE = True
 except ImportError:
-    try:
-        import pymupdf as fitz
-
-        PYMUPDF_AVAILABLE = True
-    except ImportError:
-        PYMUPDF_AVAILABLE = False
-        fitz = None  # type: ignore
+    PYMUPDF_AVAILABLE = False
+    pymupdf = None  # type: ignore
 
 try:
     import pytesseract
@@ -462,7 +457,7 @@ class OCRService:
             lang_code = _normalize_language_code(language)
 
             # Open PDF
-            doc = fitz.open(pdf_path)
+            doc = pymupdf.open(pdf_path)
             results = {
                 "pages": [],
                 "total_pages": doc.page_count,

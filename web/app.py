@@ -1036,13 +1036,8 @@ app = FastAPI(
     **DOCS_URLS,
 )
 
-# Add CORS middleware — origins loaded from config/env (CURATOR_CORS_ORIGINS or cors_origins in config.yaml)
+# Origins come from CURATOR_CORS_ORIGINS or cors_origins. A wildcard is ignored.
 _cors_origins = app_state.config_loader.get_cors_origins()
-if _cors_origins == ["*"]:
-    logger.warning(
-        "CORS allow_origins is ['*'] (all origins). "
-        "Restrict this in production via cors_origins in config.yaml or CURATOR_CORS_ORIGINS env var."
-    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,

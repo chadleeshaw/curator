@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import fitz  # PyMuPDF
+import pymupdf
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ _MAX_IMAGE_TO_PAGE_AREA = 1.15
 _BROWSER_SAFE_COLORSPACES = ("DeviceRGB", "DeviceGray", "ICCBased(RGB", "ICCBased(Gray")
 
 
-def _embedded_page_jpeg(doc: fitz.Document, page: fitz.Page) -> Optional[bytes]:
+def _embedded_page_jpeg(doc: pymupdf.Document, page: pymupdf.Page) -> Optional[bytes]:
     """
     Return the page's own JPEG if the page is nothing but one full-page scan.
 
@@ -48,7 +48,7 @@ def _embedded_page_jpeg(doc: fitz.Document, page: fitz.Page) -> Optional[bytes]:
     if skew_x or skew_y or scale_x <= 0 or scale_y <= 0:
         return None
 
-    bbox, page_area = fitz.Rect(image["bbox"]), page.rect.get_area()
+    bbox, page_area = pymupdf.Rect(image["bbox"]), page.rect.get_area()
     if (bbox & page.rect).get_area() < _MIN_PAGE_COVERAGE * page_area:
         return None
     if bbox.get_area() > _MAX_IMAGE_TO_PAGE_AREA * page_area:
@@ -88,7 +88,7 @@ def get_pdf_metadata(pdf_path: Path) -> Dict[str, Any]:
         Dictionary with PDF metadata
     """
     try:
-        doc = fitz.open(pdf_path)
+        doc = pymupdf.open(pdf_path)
         metadata = {
             "title": pdf_path.stem,
             "format": "PDF",
@@ -118,7 +118,7 @@ def get_pdf_page(pdf_path: Path, page_index: int, dpi: int = 120) -> bytes:
         Image bytes (JPEG format)
     """
     try:
-        doc = fitz.open(pdf_path)
+        doc = pymupdf.open(pdf_path)
 
         if page_index < 0 or page_index >= len(doc):
             page_count = len(doc)
@@ -136,7 +136,7 @@ def get_pdf_page(pdf_path: Path, page_index: int, dpi: int = 120) -> bytes:
         # Render page to pixmap (image)
         # Calculate zoom factor for desired DPI (72 is PyMuPDF default DPI)
         zoom = min(dpi / 72, MAX_PAGE_WIDTH_PX / page.rect.width)
-        mat = fitz.Matrix(zoom, zoom)
+        mat = pymupdf.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=mat)
 
         # Convert to PIL Image
@@ -169,7 +169,7 @@ def get_pdf_page_thumbnail(pdf_path: Path, page_index: int, max_height: int = 15
         Thumbnail image bytes (JPEG format)
     """
     try:
-        doc = fitz.open(pdf_path)
+        doc = pymupdf.open(pdf_path)
 
         if page_index < 0 or page_index >= len(doc):
             page_count = len(doc)
@@ -183,7 +183,7 @@ def get_pdf_page_thumbnail(pdf_path: Path, page_index: int, max_height: int = 15
         # Get page dimensions and calculate zoom to achieve desired height
         page_height = page.rect.height
         zoom = max_height / page_height
-        mat = fitz.Matrix(zoom, zoom)
+        mat = pymupdf.Matrix(zoom, zoom)
 
         # Render page to pixmap
         pix = page.get_pixmap(matrix=mat)

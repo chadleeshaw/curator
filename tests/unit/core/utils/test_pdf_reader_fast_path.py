@@ -2,7 +2,7 @@
 
 from io import BytesIO
 
-import fitz
+import pymupdf
 from PIL import Image
 
 from core.utils.readers.pdf import MAX_PAGE_WIDTH_PX, get_pdf_page
@@ -15,7 +15,7 @@ def _jpeg(width=600, height=800) -> bytes:
 
 
 def _pdf(tmp_path, build, width=600, height=800):
-    doc = fitz.open()
+    doc = pymupdf.open()
     build(doc.new_page(width=width, height=height))
     path = tmp_path / "test.pdf"
     doc.save(path)
@@ -51,7 +51,7 @@ def test_scan_with_invisible_ocr_layer_is_returned_untouched(tmp_path):
 
 def test_partial_image_is_rendered(tmp_path):
     scan = _jpeg()
-    path = _pdf(tmp_path, lambda page: page.insert_image(fitz.Rect(0, 0, 300, 400), stream=scan))
+    path = _pdf(tmp_path, lambda page: page.insert_image(pymupdf.Rect(0, 0, 300, 400), stream=scan))
     assert get_pdf_page(path, 0) != scan
 
 

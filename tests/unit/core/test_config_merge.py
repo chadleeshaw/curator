@@ -127,6 +127,15 @@ class TestRemoveDeprecatedKeys:
         assert len(cleaned) == len(config)
         assert removed == []
 
+    def test_cors_origins_is_kept(self):
+        """cors_origins is a real setting, not a leftover key."""
+        config = {"server": {}, "cors_origins": ["http://localhost:8000"]}
+
+        cleaned, removed = _remove_deprecated_keys(config)
+
+        assert removed == []
+        assert cleaned["cors_origins"] == ["http://localhost:8000"]
+
 
 class TestMergeConfigWithTemplate:
     """Test full config merge workflow"""

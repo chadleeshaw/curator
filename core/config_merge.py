@@ -41,6 +41,7 @@ VALID_CONFIG_KEYS = {
     "tasks",
     "logging",
     "server",
+    "cors_origins",
     "jwt_secret",
 }
 

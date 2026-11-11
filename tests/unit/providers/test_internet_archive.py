@@ -9,6 +9,7 @@ Test Coverage:
 - Provider priority
 """
 
+import logging
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
@@ -415,6 +416,59 @@ class TestInternetArchiveProviderSearch:
         assert " OR " in actual_query
 
         assert len(results) == 1
+
+    @patch("providers.internet_archive.search_items")
+    def test_feed_poll_log_names_the_poll_once(self, mock_search, caplog):
+        """An empty query is the feed poll. One line, and a full page says so."""
+        mock_search.return_value = iter(
+            [
+                {
+                    "identifier": "item_1",
+                    "title": "January Issue",
+                    "date": "2024-01-01",
+                    "collection": ["magazines"],
+                    "mediatype": "texts",
+                    "format": ["Text PDF"],
+                }
+            ]
+        )
+        provider = InternetArchiveProvider(
+            {
+                "type": "internet_archive",
+                "name": "IA",
+                "collections": ["magazines"],
+                "max_results": 1,
+            }
+        )
+
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger="providers.internet_archive"):
+            results = provider.search("")
+
+        assert len(results) == 1
+        infos = [record.message for record in caplog.records if record.levelno == logging.INFO]
+        assert infos == ["[IA] Feed poll of configured collections: 1 newest result (stopped at the 1-row cap)"]
+
+    @patch("providers.internet_archive.search_items")
+    def test_title_search_logs_the_title_once(self, mock_search, caplog):
+        mock_search.return_value = iter(
+            [
+                {
+                    "identifier": "wired_2024_01",
+                    "title": "Wired Magazine January 2024",
+                    "date": "2024-01-01",
+                    "format": ["Text PDF"],
+                }
+            ]
+        )
+        provider = InternetArchiveProvider({"type": "internet_archive", "name": "IA"})
+
+        with caplog.at_level(logging.INFO, logger="providers.internet_archive"):
+            provider.search("Wired")
+
+        infos = [record.message for record in caplog.records if record.levelno == logging.INFO]
+        assert "[IA] General search for 'Wired': 1 result" in infos
+        assert all("for ''" not in message for message in infos)
 
 
 class TestInternetArchiveProviderRateLimiting:

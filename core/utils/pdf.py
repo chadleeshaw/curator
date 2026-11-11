@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
-import fitz  # PyMuPDF
+import pymupdf
 from pdf2image import convert_from_path
 from PIL import Image
 
@@ -37,7 +37,7 @@ def is_landscape_page(pdf_path: Path, page_number: int = 1) -> Tuple[bool, float
         - aspect_ratio: width / height ratio
     """
     try:
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         page_index = page_number - 1
 
         if page_index < 0 or page_index >= len(doc):

@@ -45,13 +45,10 @@ _EXPECTED_MONTH = "January"
 
 def _render_page(pdf_path: str, dpi: int, page_num: int = 0):
     """Render a single PDF page to a PIL Image at the given DPI."""
-    try:
-        import fitz
-    except ImportError:
-        import pymupdf as fitz
+    import pymupdf
     from PIL import Image
 
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     pix = doc[page_num].get_pixmap(dpi=dpi)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     doc.close()
@@ -60,13 +57,10 @@ def _render_page(pdf_path: str, dpi: int, page_num: int = 0):
 
 def _render_all_pages(pdf_path: str, dpi: int, max_pages: int = 2):
     """Render up to max_pages of a PDF to PIL Images at the given DPI."""
-    try:
-        import fitz
-    except ImportError:
-        import pymupdf as fitz
+    import pymupdf
     from PIL import Image
 
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     images = []
     for i in range(min(max_pages, doc.page_count)):
         pix = doc[i].get_pixmap(dpi=dpi)
@@ -254,7 +248,7 @@ class TestCrop:
 # Benchmark 4 — Parallel page processing
 # Currently the 2-page scan is sequential: page 1 OCR completes, then page 2.
 # Each pytesseract call spawns its own tesseract subprocess, so they can run
-# in parallel. We pre-render both pages (fitz isn't thread-safe) then submit
+# in parallel. We pre-render both pages (pymupdf isn't thread-safe) then submit
 # both OCR calls to a ThreadPoolExecutor simultaneously.
 # ---------------------------------------------------------------------------
 
@@ -273,7 +267,7 @@ class TestParallelPages:
         assert len(results) == len(images)
 
     def test_two_pages_parallel(self, benchmark, ocr_available):
-        """Render 2 pages sequentially (fitz constraint), then OCR both in parallel."""
+        """Render 2 pages sequentially (pymupdf constraint), then OCR both in parallel."""
         images = _render_all_pages(PDF_PATH, dpi=200, max_pages=2)
 
         def run():

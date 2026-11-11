@@ -353,7 +353,7 @@ class TestPDFUtilsIntegration:
 class TestLandscapeDetection:
     """Test landscape page detection and cropping functionality"""
 
-    @patch("core.utils.pdf.fitz")
+    @patch("core.utils.pdf.pymupdf")
     def test_is_landscape_page_portrait(self, mock_fitz, tmp_path):
         """Test detection of portrait-oriented page."""
         pdf_path = tmp_path / "portrait.pdf"
@@ -376,7 +376,7 @@ class TestLandscapeDetection:
         assert aspect_ratio < 1.0
         mock_doc.close.assert_called_once()
 
-    @patch("core.utils.pdf.fitz")
+    @patch("core.utils.pdf.pymupdf")
     def test_is_landscape_page_landscape(self, mock_fitz, tmp_path):
         """Test detection of landscape-oriented page."""
         pdf_path = tmp_path / "landscape.pdf"
@@ -400,7 +400,7 @@ class TestLandscapeDetection:
         assert abs(aspect_ratio - 1.545) < 0.01  # 1224/792 ≈ 1.545
         mock_doc.close.assert_called_once()
 
-    @patch("core.utils.pdf.fitz")
+    @patch("core.utils.pdf.pymupdf")
     def test_is_landscape_page_invalid_page_number(self, mock_fitz, tmp_path):
         """Test handling of invalid page number."""
         pdf_path = tmp_path / "test.pdf"
@@ -420,7 +420,7 @@ class TestLandscapeDetection:
         assert is_landscape is False
         assert aspect_ratio == 1.0
 
-    @patch("core.utils.pdf.fitz")
+    @patch("core.utils.pdf.pymupdf")
     def test_is_landscape_page_error_handling(self, mock_fitz, tmp_path):
         """Test error handling during page dimension check."""
         pdf_path = tmp_path / "corrupt.pdf"

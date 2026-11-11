@@ -259,5 +259,33 @@ class TestServerConfiguration:
         assert 1024 <= server["port"] <= 65535
 
 
+class TestCorsOrigins:
+    """A wildcard must not be handed to the CORS middleware."""
+
+    def test_missing_setting_allows_localhost_only(self, config_loader, monkeypatch):
+        monkeypatch.delenv("CURATOR_CORS_ORIGINS", raising=False)
+        config_loader.config.pop("cors_origins", None)
+
+        assert config_loader.get_cors_origins() == ["http://localhost:8000"]
+
+    def test_wildcard_is_ignored(self, config_loader, monkeypatch):
+        monkeypatch.delenv("CURATOR_CORS_ORIGINS", raising=False)
+        config_loader.config["cors_origins"] = ["*"]
+
+        assert config_loader.get_cors_origins() == ["http://localhost:8000"]
+
+    def test_wildcard_is_dropped_from_a_real_list(self, config_loader, monkeypatch):
+        monkeypatch.delenv("CURATOR_CORS_ORIGINS", raising=False)
+        config_loader.config["cors_origins"] = ["http://192.168.1.114:8000", "*"]
+
+        assert config_loader.get_cors_origins() == ["http://192.168.1.114:8000"]
+
+    def test_env_overrides_config(self, config_loader, monkeypatch):
+        monkeypatch.setenv("CURATOR_CORS_ORIGINS", "http://docker04:8000,*")
+        config_loader.config["cors_origins"] = ["http://192.168.1.114:8000"]
+
+        assert config_loader.get_cors_origins() == ["http://docker04:8000"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

@@ -444,16 +444,17 @@ server:
   port: 8000
 
 # CORS allowed origins
-# Controls which browser origins can make requests to the API.
-# Default: ["*"] (all origins) — RESTRICT THIS IN PRODUCTION.
+# The web UI is served by this app, so opening it in a browser does not need CORS.
+# Set this only for a page on another origin that calls the API.
+# A wildcard is ignored.
 #
 # Examples:
 #   cors_origins: ["http://localhost:8000"]
-#   cors_origins: ["https://curator.myserver.com", "http://192.168.1.10:8000"]
+#   cors_origins: ["http://192.168.1.114:8000"]
 #
 # Can also be set via environment variable (comma-separated):
-#   CURATOR_CORS_ORIGINS=https://curator.myserver.com,http://192.168.1.10:8000
-cors_origins: ["*"]
+#   CURATOR_CORS_ORIGINS=http://192.168.1.114:8000
+cors_origins: ["http://localhost:8000"]
 
 # JWT Authentication Secret
 # Used for signing JWT tokens for user authentication

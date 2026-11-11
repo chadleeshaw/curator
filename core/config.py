@@ -148,6 +148,19 @@ def _validate_directory(dir_path: Path, dir_name: str) -> None:
         raise ValueError(f"Permission denied creating {dir_name} directory: {dir_path}") from e
 
 
+def _origins_from_value(value) -> List[str]:
+    """Parse a CORS origin list. A wildcard is dropped."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, str):
+        items = value.split(",")
+    else:
+        return []
+    return [origin.strip() for origin in items if str(origin).strip() and str(origin).strip() != "*"]
+
+
 def _validate_database_path(db_path: Path) -> None:
     """
     Validate database path by ensuring parent directory exists and is writable.
@@ -588,20 +601,17 @@ class ConfigLoader:
         The env var accepts comma-separated origins:
             CURATOR_CORS_ORIGINS=http://localhost:8000,https://myapp.com
 
-        To lock down CORS in production, set cors_origins in config.yaml or the env var.
+        A wildcard is ignored. The UI is served by this app, so it does not need one.
         """
-        env_val = os.environ.get(ENV_CURATOR_CORS_ORIGINS)
-        if env_val:
-            return [o.strip() for o in env_val.split(",") if o.strip()]
+        env_origins = _origins_from_value(os.environ.get(ENV_CURATOR_CORS_ORIGINS))
+        if env_origins:
+            return env_origins
 
-        config_val = self.config.get(CONFIG_KEY_CORS_ORIGINS)
-        if config_val:
-            if isinstance(config_val, list):
-                return config_val
-            if isinstance(config_val, str):
-                return [o.strip() for o in config_val.split(",") if o.strip()]
+        config_origins = _origins_from_value(self.config.get(CONFIG_KEY_CORS_ORIGINS))
+        if config_origins:
+            return config_origins
 
-        return ["http://localhost:8000"]  # Default: localhost only (restrict via config or env var in production)
+        return ["http://localhost:8000"]
 
     def reload_config(self) -> None:
         """Reload config from file"""
