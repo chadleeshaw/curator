@@ -83,6 +83,32 @@ class TestRecordSearchResults:
 
         session.close()
 
+    def test_blacklisted_extension_is_not_recorded(self, test_db, issue_discovery_service):
+        engine, session_factory = test_db
+        session = session_factory()
+        tracking = PeriodicalTracking(olid="test-mag", title="Test Magazine", track_all_editions=True, user_id=1)
+        session.add(tracking)
+        session.commit()
+
+        stats = issue_discovery_service.record_search_results(
+            tracking_id=tracking.id,
+            search_results=[
+                {
+                    "title": "Test Magazine January 2024.mkv",
+                    "url": "http://example.com/video.nzb",
+                    "provider": "TestProvider",
+                    "pubdate": "2024-01-15T10:30:00Z",
+                    "guid": "video-guid",
+                }
+            ],
+            session=session,
+        )
+
+        assert stats["new"] == 0
+        assert stats["rejected_non_periodical"] == 1
+        assert session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).count() == 0
+        session.close()
+
     def test_record_updates_existing_issues(self, test_db, issue_discovery_service):
         """Test updating times_seen and last_seen for existing issues"""
         engine, session_factory = test_db

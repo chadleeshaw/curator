@@ -29,6 +29,7 @@ class SABnzbdClient(DownloadClient):
 
         if not self.api_key:
             raise ValueError("SABnzbd client requires api_key")
+        self._last_rate_limit_wait: Dict[str, int] = {}
 
     def _parse_wait_time(self, text: str) -> Optional[int]:
         """
@@ -228,6 +229,7 @@ class SABnzbdClient(DownloadClient):
             rate_limit_status = self._check_rate_limit_status(job_id, wait_text, labels)
             if rate_limit_status:
                 return rate_limit_status
+        self._last_rate_limit_wait.pop(job_id, None)
 
         # Normal download status
         status = "downloading" if slot.get("status") == "Downloading" else "pending"
@@ -270,17 +272,18 @@ class SABnzbdClient(DownloadClient):
 
         return ""
 
-    def _check_rate_limit_status(self, job_id: str, wait_text: str, labels: list) -> Optional[Dict[str, Any]]:
+    def _check_rate_limit_status(self, job_id: str, wait_text: str, _labels: list) -> Optional[Dict[str, Any]]:
         """Check if job is rate limited and return status."""
         wait_time = self._parse_wait_time(wait_text)
         if not wait_time:
             return None
 
-        logger.warning(
-            f"[SABnzbd] Job {job_id} is rate limited by provider. "
-            f"Waiting {wait_time} seconds (~{wait_time / 3600:.1f} hours) before retry. "
-            f"Labels: {labels}"
-        )
+        if self._last_rate_limit_wait.get(job_id) != wait_time:
+            self._last_rate_limit_wait[job_id] = wait_time
+            logger.info(
+                f"[SABnzbd] Job {job_id} is rate limited by provider. "
+                f"Waiting {wait_time} seconds (~{wait_time / 3600:.1f} hours) before retry."
+            )
         return {
             "status": "pending",
             "progress": 0,

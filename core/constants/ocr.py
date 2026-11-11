@@ -87,8 +87,8 @@ PDF_COVER_DPI_OCR = 200
 """DPI for OCR text extraction (~1511x1956 for 8.5x11"). Benchmarked at 200 vs 300 DPI — identical
 accuracy on tested fixtures with ~45% faster Tesseract processing. 300 DPI baseline saved in"""
 
-PNG_GENERATION_TIMEOUT = 30
-"""Timeout in seconds for PDF-to-PNG conversion (poppler can hang on corrupted PDFs)"""
+PNG_GENERATION_TIMEOUT = 120
+"""Per-PDF timeout in seconds for the OCR image. A slow page must not cancel the others."""
 
 PDF_TEXT_SCAN_TIMEOUT = 3
 """Timeout in seconds for direct PDF text extraction (pypdf can hang on corrupted PDFs)"""

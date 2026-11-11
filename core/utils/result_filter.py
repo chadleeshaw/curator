@@ -11,6 +11,7 @@ import re
 from typing import Any, Dict, Iterable, Optional
 
 from core.constants.country import ISO_COUNTRIES, THREE_LETTER_COUNTRY_CODES
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
 from core.constants.validation import (
     COLLECTION_INDICATOR_WORDS,
     METADATA_WORDS,
@@ -154,15 +155,30 @@ def title_contains_name(result_title: str, names: Iterable[str]) -> bool:
     results must be re-checked locally before they are queued for download.
     The first word of a name is always required; later generic words (magazine,
     country names/codes) are optional.
+
+    A one-word name matches too many releases on its own. It has to look like
+    one issue (a month, a year, "magazine", an issue number) and must not be
+    the start of a different publication ("Times", "Weekly").
     """
     normalized_title = re.sub(r"[_.\-]", " ", result_title.lower())
     for name in names:
         tokens = re.sub(r"[_.\-]", " ", name.lower()).split()
         words = [t for t in tokens if len(t) >= 2] or tokens
         required = words[:1] + [w for w in words[1:] if w not in _GENERIC_NAME_WORDS]
-        if required and all(re.search(_build_word_boundary_pattern(w), normalized_title) for w in required):
-            return True
+        if not required or not all(re.search(_build_word_boundary_pattern(w), normalized_title) for w in required):
+            continue
+        if len(words) == 1:
+            has_modifier, _modifier = _has_periodical_modifier(normalized_title, words[0])
+            if has_modifier or not _has_periodical_indicators(normalized_title):
+                continue
+        return True
     return False
+
+
+def title_has_blacklisted_extension(title: str) -> bool:
+    """Return True when the title names a file type Curator will not import."""
+    title_lower = title.lower()
+    return any(ext in title_lower for ext in BLACKLISTED_FILE_EXTENSIONS)
 
 
 def _query_contains_collection_word(query: str) -> bool:

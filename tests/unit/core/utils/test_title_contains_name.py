@@ -21,6 +21,11 @@ from core.utils.result_filter import title_contains_name
         ("Muscle & Fitness, (Vol 62)", ["Muscle Fitness"], True),
         ("Australian.Geographic-May.2024", ["Geographic Australia", "Australian Geographic"], True),
         ("Womens Fitness UK-Issue 4", ["Mens Fitness"], False),
+        # a one-word name needs an issue signal, and must not start a different title
+        ("Club March 2024", ["Club"], True),
+        ("Club Picnic", ["Club"], False),
+        ("Club Times March 2024", ["Club"], False),
+        ("Show.mkv", ["Show"], False),
     ],
 )
 def test_title_contains_name(title, names, expected):

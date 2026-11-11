@@ -495,6 +495,25 @@ def test_sabnzbd_unreachable_does_not_fail_the_download():
         assert client.get_status("nzo_12345")["status"] == "pending"
 
 
+def test_rate_limit_is_logged_once_until_the_wait_changes(caplog):
+    """A job that is only waiting must not warn on every status poll."""
+    import logging
+
+    client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})
+
+    with caplog.at_level(logging.INFO, logger="clients.sabnzbd"):
+        first = client._check_rate_limit_status("nzo_1", "WAIT 3600 seconds until retry", [])
+        second = client._check_rate_limit_status("nzo_1", "WAIT 3600 seconds until retry", [])
+        changed = client._check_rate_limit_status("nzo_1", "WAIT 1800 seconds until retry", [])
+
+    assert first["status"] == "pending"
+    assert second["status"] == "pending"
+    assert changed["wait_time"] == 1800
+    messages = [record.message for record in caplog.records if "rate limited" in record.message]
+    assert len(messages) == 2
+    assert all(record.levelno == logging.INFO for record in caplog.records if "rate limited" in record.message)
+
+
 def test_sabnzbd_job_missing_from_queue_and_history_is_unknown():
     """A job that really is gone is still reported as unknown."""
     client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})

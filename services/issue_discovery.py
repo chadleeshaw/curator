@@ -31,7 +31,7 @@ from core.constants.country import (
     THREE_LETTER_COUNTRY_CODES,
 )
 from core.constants.validation import ANTI_PERIODICAL_PATTERNS, PERIODICAL_PATTERNS
-from core.utils.result_filter import title_contains_name, title_matches_query
+from core.utils.result_filter import title_contains_name, title_has_blacklisted_extension, title_matches_query
 from models.database import (
     DiscoveredIssue,
     DownloadStatus,
@@ -109,6 +109,11 @@ class IssueDiscoveryService:
 
                 if not self._validate_is_periodical(search_result):
                     logger.debug(f"Rejecting non-periodical result: {title}")
+                    stats["rejected_non_periodical"] += 1
+                    continue
+
+                if title_has_blacklisted_extension(title):
+                    logger.debug(f"Rejecting blacklisted file type: {title}")
                     stats["rejected_non_periodical"] += 1
                     continue
 

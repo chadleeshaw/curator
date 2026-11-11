@@ -24,14 +24,18 @@ class TestWordBoundaryMatching:
         assert not service._title_matches_any_term("maximo garcia part 1", ["maxim"])
 
     def test_word_at_start(self):
-        """Should match word at start of title"""
+        """Should match word at start of title when the title is an issue"""
         service = FeedMatchService()
-        assert service._title_matches_any_term("maxim for men", ["maxim"])
+        assert service._title_matches_any_term("maxim march 2024", ["maxim"])
 
     def test_word_at_end(self):
-        """Should match word at end of title"""
+        """Should match word at end of title when the title is an issue"""
         service = FeedMatchService()
-        assert service._title_matches_any_term("us edition maxim", ["maxim"])
+        assert service._title_matches_any_term("us edition maxim magazine", ["maxim"])
+
+    def test_one_word_name_without_an_issue_signal_does_not_match(self):
+        service = FeedMatchService()
+        assert not service._title_matches_any_term("maxim for men", ["maxim"])
 
     def test_word_in_middle(self):
         """Should match word in middle of title"""

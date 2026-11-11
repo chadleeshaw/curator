@@ -276,7 +276,7 @@ def _apply_scan_metadata_to_periodical(
     return updated
 
 
-def _generate_pngs_parallel(png_jobs: list) -> Dict[int, bool]:
+def _generate_pngs_parallel(png_jobs: list, timeout: float = PNG_GENERATION_TIMEOUT) -> Dict[int, str]:
     """
     Generate OCR PNGs for multiple periodicals in parallel using separate child processes.
 
@@ -287,16 +287,17 @@ def _generate_pngs_parallel(png_jobs: list) -> Dict[int, bool]:
         dpi            (int)
         max_dimension  (int)
 
-    All processes are started at the same time and then collected, so the wall-time
-    is dominated by the slowest single PDF rather than the sum of all PDFs.
+    All processes are started at the same time. Each one gets its own timeout,
+    measured from its own start, so one slow PDF does not cancel the others.
 
     Returns:
-        Dict mapping periodical_id → True (success) / False (failed/timed-out)
+        Dict mapping periodical_id to "ok", "timeout", or "failed".
     """
     if not png_jobs:
         return {}
 
-    # Start all processes simultaneously
+    import time as _time
+
     running = []
     for job in png_jobs:
         result_queue = _mp_ctx.Queue()
@@ -311,39 +312,36 @@ def _generate_pngs_parallel(png_jobs: list) -> Dict[int, bool]:
             ),
             daemon=True,
         )
+        started = _time.monotonic()
         proc.start()
-        running.append((job["periodical_id"], job["png_path"], proc, result_queue))
+        running.append((job["periodical_id"], job["png_path"], proc, result_queue, started))
         logger.debug(f"Started PNG generation process (pid={proc.pid}) for periodical {job['periodical_id']}")
 
     logger.info(f"Started {len(running)} PNG generation processes in parallel")
 
-    # Collect results — wait up to PNG_GENERATION_TIMEOUT for each, measured from
-    # when all processes were already running, so overlapping waits are free.
-    import time as _time
-
-    deadline = _time.monotonic() + PNG_GENERATION_TIMEOUT
-    results: Dict[int, bool] = {}
-
-    for periodical_id, png_path, proc, result_queue in running:
-        remaining = max(deadline - _time.monotonic(), 0)
+    results: Dict[int, str] = {}
+    for periodical_id, png_path, proc, result_queue, started in running:
+        remaining = max(timeout - (_time.monotonic() - started), 0)
         proc.join(timeout=remaining)
 
         if proc.is_alive():
             proc.kill()
             proc.join(timeout=2)
-            logger.warning(f"PNG generation timed out for periodical {periodical_id} - PDF may be corrupted")
-            results[periodical_id] = False
+            logger.info(
+                f"OCR image generation timed out for periodical {periodical_id} after {timeout:.0f}s; will retry"
+            )
+            results[periodical_id] = "timeout"
         elif not result_queue.empty():
             result = result_queue.get_nowait()
             if result.get("success"):
                 logger.debug(f"Generated OCR PNG: {png_path}")
-                results[periodical_id] = True
+                results[periodical_id] = "ok"
             else:
                 logger.warning(f"Failed to generate OCR PNG for periodical {periodical_id}: {result.get('error')}")
-                results[periodical_id] = False
+                results[periodical_id] = "failed"
         else:
             logger.warning(f"PNG generation process exited without result for periodical {periodical_id}")
-            results[periodical_id] = False
+            results[periodical_id] = "failed"
 
     return results
 
@@ -621,13 +619,24 @@ class OCRQueueService:
 
             cover_path = None
             png_generated = False
+            outcome = png_results.get(periodical.id) if png_path is not None else None
 
-            if png_path is not None:
+            if outcome == "timeout":
                 if png_path.exists():
-                    cover_path = str(png_path)
-                    # Flag as newly generated only if we launched a process for it
-                    png_generated = png_results.get(periodical.id, False)
-                    logger.debug(f"Using OCR PNG: {png_path}")
+                    png_path.unlink(missing_ok=True)
+                logger.info(f"OCR image generation timed out for periodical {periodical.id}; will retry")
+                db.expire(job)
+                job = db.query(OCRJob).filter(OCRJob.id == job.id).first()
+                if job:
+                    job.last_error = "OCR image generation timed out"
+                    _safe_commit(db, f"keep job {job.id} pending after image timeout")
+                stats["skipped"] += 1
+                continue
+
+            if png_path is not None and png_path.exists():
+                cover_path = str(png_path)
+                png_generated = outcome == "ok"
+                logger.debug(f"Using OCR PNG: {png_path}")
 
             if not cover_path:
                 logger.warning(f"Could not generate OCR PNG for periodical {periodical.id}")
