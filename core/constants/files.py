@@ -28,6 +28,12 @@ PDF_COVER_QUALITY = 50
 PDF_COVER_QUALITY_HIGH = 85
 """JPEG quality for high resolution covers (1-100)"""
 
+PDF_RENDER_PAGE_WORKERS = 4
+"""Default worker processes for full PDF page renders."""
+
+PDF_RENDER_THUMBNAIL_WORKERS = 2
+"""Default worker processes for PDF page thumbnails."""
+
 EPUB_COVER_QUALITY = 85
 """JPEG quality for EPUB cover extraction (1-100)"""
 

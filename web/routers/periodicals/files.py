@@ -5,14 +5,16 @@ File operations for periodicals
 import asyncio
 import mimetypes
 import multiprocessing
+import os
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import Depends, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
+from core.constants.files import PDF_RENDER_PAGE_WORKERS, PDF_RENDER_THUMBNAIL_WORKERS
 from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
@@ -39,28 +41,81 @@ from web.routers.auth import get_verify_token
 router = _shared.router
 logger = _shared.logger
 
-# PDF rendering holds the GIL, so threads render one page at a time: a heavy page
-# takes several seconds and a sidebar full of thumbnails used to queue ahead of the
-# page being read. Separate process pools let pages render in parallel and keep
-# thumbnails from delaying them. "spawn" matches the OCR pool (fork is unsafe with threads).
-# ponytail: workers start on first use (~5 s each, once per restart); pre-warm at
-# startup if that first open matters.
-_RENDER_POOL_SIZES = {"page": 4, "thumbnail": 2}
+_POOL_SETTINGS = {
+    "page": ("CURATOR_PDF_RENDER_PAGE_WORKERS", "render_page_workers", PDF_RENDER_PAGE_WORKERS),
+    "thumbnail": ("CURATOR_PDF_RENDER_THUMBNAIL_WORKERS", "render_thumbnail_workers", PDF_RENDER_THUMBNAIL_WORKERS),
+}
 _render_pools: Dict[str, ProcessPoolExecutor] = {}
 
 
-async def _render_in_process(pool_name: str, func: Callable[..., bytes], *args: Any) -> bytes:
-    """Run a PDF render function in the named process pool."""
+def _positive_worker_count(raw, default: int) -> int:
+    """A configured worker count, or the default when the value is unusable."""
+    try:
+        count = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return count if count > 0 else default
+
+
+def _configured_pool_size(config_key: str) -> Optional[int]:
+    """Worker count from pdf config, or None when config cannot be read."""
+    try:
+        from core.config import ConfigLoader
+
+        return ConfigLoader().get_pdf().get(config_key)
+    except Exception:
+        logger.debug("PDF render pool size is using the default", exc_info=True)
+        return None
+
+
+def _render_pool_size(pool_name: str) -> int:
+    """Workers for one pool. An environment variable wins over config."""
+    env_name, config_key, default = _POOL_SETTINGS[pool_name]
+    raw = os.environ.get(env_name)
+    if raw is None:
+        raw = _configured_pool_size(config_key)
+    return _positive_worker_count(raw, default)
+
+
+def _get_render_pool(pool_name: str) -> ProcessPoolExecutor:
+    """Return the page or thumbnail pool, creating it on first use.
+
+    PDF rendering holds the GIL, so threads render one page at a time. Separate
+    process pools let pages render in parallel and keep thumbnails from delaying
+    them. Workers use spawn, matching the OCR pool, because fork is unsafe with
+    threads already running.
+    """
     pool = _render_pools.get(pool_name)
     if pool is None:
-        pool = _render_pools[pool_name] = ProcessPoolExecutor(
-            max_workers=_RENDER_POOL_SIZES[pool_name], mp_context=multiprocessing.get_context("spawn")
+        pool = ProcessPoolExecutor(
+            max_workers=_render_pool_size(pool_name),
+            mp_context=multiprocessing.get_context("spawn"),
         )
+        _render_pools[pool_name] = pool
+    return pool
+
+
+def shutdown_render_pools() -> None:
+    """Stop PDF render workers. Called when the application shuts down."""
+    pools = list(_render_pools.items())
+    _render_pools.clear()
+    for name, pool in pools:
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            logger.warning("Could not shut down the %s PDF render pool", name, exc_info=True)
+
+
+async def _render_in_process(pool_name: str, func: Callable[..., bytes], *args: Any) -> bytes:
+    """Run a PDF render function in the named process pool.
+
+    A worker that dies (for example MuPDF on a corrupt file) breaks the pool.
+    Drop it so the next request starts a fresh one.
+    """
+    pool = _get_render_pool(pool_name)
     try:
         return await asyncio.get_running_loop().run_in_executor(pool, func, *args)
     except BrokenProcessPool:
-        # A worker died (e.g. MuPDF crashed on a corrupt file). The pool is unusable
-        # from now on, so drop it and let the next request start a fresh one.
         _render_pools.pop(pool_name, None)
         raise
 

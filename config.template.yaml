@@ -281,6 +281,12 @@ pdf:
   cover_quality_low: 50 # For thumbnails
   cover_quality_high: 85 # For high-quality covers
 
+  # PDF reader process pools. Pages and thumbnails render in separate pools so
+  # a sidebar of thumbnails does not delay the page being read.
+  # Environment overrides: CURATOR_PDF_RENDER_PAGE_WORKERS, CURATOR_PDF_RENDER_THUMBNAIL_WORKERS
+  render_page_workers: 4
+  render_thumbnail_workers: 2
+
 downloads:
   # Maximum number of retry attempts for failed downloads
   # Note: Currently not configurable via YAML - hardcoded in core/constants/app.py

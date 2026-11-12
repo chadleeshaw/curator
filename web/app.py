@@ -1023,6 +1023,11 @@ async def lifespan(app: FastAPI):
             app_state.ocr_processor_task.shutdown()
             logger.info("OCR processor shutdown complete")
 
+        from web.routers.periodicals.files import shutdown_render_pools
+
+        shutdown_render_pools()
+        logger.info("PDF render pools shut down")
+
         logger.info("Curator shutdown complete")
     except Exception as e:
         logger.error(f"Shutdown error: {e}")
