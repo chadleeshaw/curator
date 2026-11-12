@@ -887,6 +887,7 @@ class TestPeriodicalFileRoutes:
                 tracking_id=source_id,
                 source_url="http://example.com/north-title",
                 result_title="North Title",
+                status=DownloadSubmission.StatusEnum.COMPLETED,
             )
         )
         session.add(
@@ -953,6 +954,52 @@ class TestPeriodicalFileRoutes:
         assert staying.tracking_id == source_id
         assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one() is not None
         session.close()
+
+    def test_move_keeps_a_configured_or_downloading_tracking(self, test_client, test_db, monkeypatch):
+        """A tracking with user settings or a download in progress is not removed."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title UK", language="English")
+
+        def start_download(tracking_id):
+            session = _session(test_db)
+            session.add(
+                DownloadSubmission(
+                    user_id=1,
+                    tracking_id=tracking_id,
+                    source_url="http://example.com/north-title",
+                    result_title="North Title",
+                )
+            )
+            session.commit()
+            session.close()
+
+        configured_id = _insert_tracking(test_db, olid="OL-CONFIGURED", title="North Title", search_aliases="North")
+        downloading_id = _insert_tracking(test_db, olid="OL-DOWNLOADING", title="North Title")
+        start_download(downloading_id)
+
+        for index, source_id in enumerate((configured_id, downloading_id)):
+            periodical_id = _insert_periodical(
+                test_db,
+                title="North Title",
+                language="English",
+                tracking_id=source_id,
+                file_path=f"/library/North Title/{index}.pdf",
+            )
+
+            response = test_client.post(
+                f"/api/periodicals/{periodical_id}/move-to-tracking",
+                params={"target_tracking_id": target_id},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["tracking_removed"] is False
+            session = _session(test_db)
+            assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one_or_none()
+            session.close()
 
     def test_language_save_updates_tracking_and_every_issue(self, test_client, test_db, monkeypatch):
         """Choosing English on one issue clears a wrong language for the whole magazine."""

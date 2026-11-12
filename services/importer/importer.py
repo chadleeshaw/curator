@@ -25,6 +25,7 @@ from core.constants.errors import ErrorCodes
 from core.constants.files import IMPORT_MARKER_FILE, SUPPORTED_FILE_EXTENSIONS
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers.country import ISO_COUNTRIES
+from core.parsers.title import starts_with_numbered_name
 from core.utils.general import generate_olid
 from core.parsers import sanitize_filename
 from core.parsers import TitleMatcher, FileCategorizer, Parser
@@ -55,14 +56,14 @@ def _unusable_tracking_title(title: str) -> bool:
     """A leftover issue number or the word Magazine is not a magazine name.
 
     A 4-digit name such as 2600, a short number followed by a plus, and a
-    numbered magazine such as 17 Magazine, stay. "12 North Title" does not.
+    numbered name such as 17 Magazine or 20 Minutes, stay. "12 North Title" does not.
     """
     cleaned = (title or "").strip()
     if re.fullmatch(r"mag(?:azine)?", cleaned, flags=re.IGNORECASE):
         return True
     if re.fullmatch(r"\d{1,3}", cleaned):
         return True
-    if re.fullmatch(r"\d{1,3}\s+mag(?:azine)?\.?", cleaned, flags=re.IGNORECASE):
+    if starts_with_numbered_name(cleaned):
         return False
     return bool(re.match(r"^\d{1,3}\s", cleaned))
 

@@ -203,6 +203,14 @@ class TestCountryDetectionIntegration:
         assert detect_country("North Title Netherlands Edition") == "NL"
         assert detect_country("North Title [SE]") == "SE"
 
+    def test_a_bare_multi_word_country_is_not_read_as_codes(self):
+        """New Zealand is not NE (Niger), and Sri Lanka is not SR."""
+        assert detect_country("Wired New Zealand - March 2024.pdf") is None
+        assert detect_country("Wired Sri Lanka - March 2024.pdf") is None
+        assert detect_country("Wired.New.Zealand.March.2024.pdf") is None
+        assert detect_country("Wired New Zealand Edition") == "NZ"
+        assert detect_country("Wired New Zealand [NZ]") == "NZ"
+
     def test_detect_from_search_results(self):
         """Test country detection from search result titles."""
         assert detect_country("TIME Magazine (UK Edition) - December 2023") == "UK"

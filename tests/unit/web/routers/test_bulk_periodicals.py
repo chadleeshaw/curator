@@ -258,6 +258,7 @@ class TestBulkMoveToTracking:
                 tracking_id=source.id,
                 source_url="http://example.com/north-title",
                 result_title="North Title",
+                status=DownloadSubmission.StatusEnum.COMPLETED,
             )
         )
         session.add(

@@ -36,11 +36,25 @@ def set_dependencies(
         _library_base_dir = Path(library_base_dir)
 
 
+def _has_user_settings(tracking) -> bool:
+    """True when the user configured this tracking beyond what auto-tracking sets."""
+    return bool(
+        tracking.search_aliases
+        or tracking.selected_years
+        or tracking.selected_editions
+        or tracking.organization_pattern
+        or tracking.download_category
+    )
+
+
 def retire_empty_source_tracking(db_session: Session, source_id: Optional[int], target_id: int) -> bool:
     """Delete a tracking row after its last issue moved to another tracking.
 
-    Downloads and discovered issues follow the issue to the target. A tracking
-    row that still has issues is left alone.
+    Download history and discovered issues follow the issue to the target. A
+    tracking row that still has issues, settings the user chose (aliases,
+    years, editions, a folder pattern or download category), or a download
+    still in progress is left alone, so a magazine the user set up is never
+    removed by moving one misfiled issue off it.
     """
     from models.database import DiscoveredIssue, DownloadSubmission, Periodical, PeriodicalTracking, StackMembership
 
@@ -52,7 +66,20 @@ def retire_empty_source_tracking(db_session: Session, source_id: Optional[int], 
         return False
 
     source = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).first()
-    if source is None:
+    if source is None or _has_user_settings(source):
+        return False
+
+    finished = (
+        DownloadSubmission.StatusEnum.COMPLETED,
+        DownloadSubmission.StatusEnum.FAILED,
+        DownloadSubmission.StatusEnum.SKIPPED,
+    )
+    in_progress = (
+        db_session.query(DownloadSubmission)
+        .filter(DownloadSubmission.tracking_id == source_id, DownloadSubmission.status.notin_(finished))
+        .count()
+    )
+    if in_progress:
         return False
 
     db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source_id).update(

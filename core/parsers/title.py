@@ -62,19 +62,45 @@ _NOT_A_NAME_WORD = {
     "us",
     "usa",
 }
+# Words of a special edition name, such as "Ultimate Guide", are a subtitle, not a person.
+_NOT_A_NAME_WORD |= {word for keyword in SPECIAL_EDITION_KEYWORDS for word in re.findall(r"[a-z']+", keyword)}
+_NOT_A_NAME_WORD |= {
+    "guide",
+    "guides",
+    "collection",
+    "handbook",
+    "manual",
+    "bookazine",
+    "ultimate",
+    "complete",
+    "essential",
+    "essentials",
+    "history",
+}
 _NAME_WORD = re.compile(r"^[A-Za-z][A-Za-z'’.-]*$")
 # A real site suffix. A magazine token such as "Title" is not one.
-# A one-label country suffix such as Name.uk is a magazine token too.
-# www.name.uk and name.example.uk are web addresses. Generic suffixes
-# such as example.com and name.co.uk still are.
+# A one-label English region suffix such as Name.uk is a magazine token
+# too, read as "Name UK". www.name.uk and name.example.uk are web
+# addresses, and so are example.com, name.co.uk, and site.ru.
 _LABEL = r"[-a-z0-9-]{1,256}"
 _GENERIC_TLD = r"info|biz|xyz|com|net|org|io|me|tv|cc|ws|to|co"
-_COUNTRY_TLD = r"fr|es|it|se|no|dk|pl|cz|be|at|ch|au|nz|ca|jp|kr|cn|uk|de|nl|ru|eu|us"
+_REGION_TLD = r"uk|us|au|nz|ca"
+# "it" and "no" are English words, so Make.It is not a site.
+_OTHER_COUNTRY_TLD = r"fr|es|se|dk|pl|cz|be|at|ch|jp|kr|cn|de|nl|ru|eu"
+_COUNTRY_TLD = rf"{_REGION_TLD}|{_OTHER_COUNTRY_TLD}|it|no"
 _SECOND_LEVEL = r"uk|au|nz|br|za|jp|kr|cn"
 _SITE_TLD = rf"(?:{_GENERIC_TLD}|{_COUNTRY_TLD})"
 _GENERIC_HOST = rf"(?:www\.)?{_LABEL}\.(?:{_GENERIC_TLD})(?:\.(?:{_SECOND_LEVEL}))?"
-_COUNTRY_HOST = rf"(?:www\.{_LABEL}|{_LABEL}\.{_LABEL})\.(?:{_COUNTRY_TLD})"
+_COUNTRY_HOST = rf"(?:www\.{_LABEL}|{_LABEL}\.{_LABEL})\.(?:{_COUNTRY_TLD})|{_LABEL}\.(?:{_OTHER_COUNTRY_TLD})"
 _SITE_HOST = rf"(?:{_GENERIC_HOST}|{_COUNTRY_HOST})"
+_LANGUAGE_WORDS = "|".join(
+    re.escape(word) for word in sorted({w for ws in LANGUAGE_INDICATORS.values() for w in ws}, key=len, reverse=True)
+)
+_LANGUAGE_TAG = re.compile(rf"\s*[\[\(_-]\s*(?:{_LANGUAGE_WORDS})\s*[\]\)_-]", re.IGNORECASE)
+_LANGUAGE_DOTTED = re.compile(rf"\.(?:{_LANGUAGE_WORDS})(?=\.)", re.IGNORECASE)
+_LANGUAGE_BEFORE_EDITION = re.compile(rf"\s(?:{_LANGUAGE_WORDS})(?=\s+edition\b)", re.IGNORECASE)
+# Inside brackets any suffix is a site, such as [site.club].
+_BRACKETED_HOST = rf"\[\s*(?:{_LABEL}\.)+[a-z]{{2,24}}\s*\]"
 
 
 def _strip_file_extension(title: str) -> str:
@@ -124,9 +150,22 @@ def _is_plus_title(part: str) -> bool:
     return bool(re.fullmatch(r"\d{1,3}\+", part))
 
 
+# A short number followed by one of these words is part of the name.
+# ponytail: word list, add a word when a real magazine needs it.
+_NUMBERED_NAME = re.compile(r"\d{1,3}\s+(?:mag(?:azine)?|minutes|days|hours|weeks|years)\b", re.IGNORECASE)
+
+
+def starts_with_numbered_name(title: str) -> bool:
+    """17 Magazine, 17 Magazine UK, and 20 Minutes keep their number.
+
+    12 North Title is an issue number plus a title.
+    """
+    return bool(_NUMBERED_NAME.match((title or "").strip()))
+
+
 def _is_numbered_magazine(title: str) -> bool:
-    """17 Magazine (and 17 Magazine UK) is the name. 12 North Title is an issue number plus a title."""
-    return bool(re.match(r"\d{1,3}\s+mag(?:azine)?\b", (title or "").strip(), flags=re.IGNORECASE))
+    """The whole title is a number plus Magazine, so Magazine is not a suffix to drop."""
+    return bool(re.fullmatch(r"\d{1,3}\s+mag(?:azine)?\.?", (title or "").strip(), flags=re.IGNORECASE))
 
 
 def _is_issue_token(part: str) -> bool:
@@ -163,7 +202,7 @@ def strip_issue_number_and_name(title: str) -> str:
     "137 - North Title - Alex Morgan" is the magazine "North Title". A credit is
     removed only when a magazine name remains. A 4-digit name such as "2600", and
     a name that is a short number followed by a plus, are kept. 137Plus and
-    137 Plus collapse to that plus form. "17 Magazine" keeps its number.
+    137 Plus collapse to that plus form. "17 Magazine" and "20 Minutes" keep their number.
     """
     if not title:
         return title
@@ -184,7 +223,7 @@ def strip_issue_number_and_name(title: str) -> str:
         parts = parts[1:]
 
     title = " - ".join(parts)
-    if _is_numbered_magazine(title):
+    if starts_with_numbered_name(title):
         return title.strip()
 
     stripped = re.sub(r"^\d{1,3}\s*-\s+(?=[A-Za-z])", "", title)
@@ -316,6 +355,7 @@ class TitleMatcher:
 
         # Remove website prefixes: [www.site.com] or www.site.com -
         # The suffix has to be a real site suffix. "North.Title-Jan" and "Name.uk-Jan" are magazine names.
+        title = re.sub(rf"^{_BRACKETED_HOST}[-\s]*", "", title, flags=re.IGNORECASE)
         title = re.sub(
             rf"^(?:\[\s*)?{_SITE_HOST}\b(?:\s*\]|\s+[-\s]*|-(?=[A-Za-z]))",
             "",
@@ -337,20 +377,13 @@ class TitleMatcher:
         # Remove common download/unpack prefixes
         title = re.sub(r"^(?:Unpack|Download|Get|Read)\s+", "", title, flags=re.IGNORECASE)
 
-        # Remove language indicators (German, French, etc.) that appear as words
-        # Pattern matches language names/codes with word boundaries (spaces, dots, etc.)
-        language_pattern = (
-            r"[\s\.](?:"
-            + "|".join(
-                [
-                    re.escape(indicator)  # Escape special regex chars in indicators
-                    for indicators in LANGUAGE_INDICATORS.values()
-                    for indicator in indicators
-                ]
-            )
-            + r")(?:[\s\.]|$)"
-        )
-        title = re.sub(language_pattern, " ", title, flags=re.IGNORECASE)
+        # Remove a language only where detect_language counts it: a tag such as
+        # [DE], .German., -DE-, or a "German Edition" phrase. A bare "Italia" or
+        # "German" does not set the language, so it stays in the title and keeps
+        # that edition off the English record.
+        title = _LANGUAGE_TAG.sub(" ", title)
+        title = _LANGUAGE_DOTTED.sub(".", title)
+        title = _LANGUAGE_BEFORE_EDITION.sub("", title)
 
         # Remove format indicators BEFORE replacing dots (to catch TruePDF as one word)
         # TruePDF indicates a digitally created (text-based) PDF vs a scanned one

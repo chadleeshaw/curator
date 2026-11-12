@@ -219,6 +219,18 @@ ISO_COUNTRIES: Dict[str, str] = {
 # A country's own name, where it differs from the English one above.
 _NATIVE_COUNTRY_NAMES: Dict[str, str] = {"Nederland": "NL", "Slovenija": "SI"}
 
+# Longest first, so "South Africa" wins over a shorter name inside it.
+_COUNTRIES_BY_NAME_LENGTH = sorted(ISO_COUNTRIES.items(), key=lambda item: len(item[1]), reverse=True)
+
+# A bare multi-word name such as "New Zealand" does not set the country, but
+# its words must not be read as codes either ("NEW" would become NE, Niger).
+_MULTI_WORD_COUNTRY = re.compile(
+    r"\b(?:"
+    + "|".join(re.escape(name).replace(r"\ ", r"[\s.]") for _code, name in _COUNTRIES_BY_NAME_LENGTH if " " in name)
+    + r")\b",
+    re.IGNORECASE,
+)
+
 
 def find_country(code_or_name: str) -> Optional[str]:
     """
@@ -281,12 +293,9 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     if not text:
         return default
 
-    # Convert to uppercase for pattern matching
-    text_upper = text.upper()
-
     # A country name counts only as an edition phrase, such as "Sweden Edition".
     # A bare "Sweden" stays in the title and does not set the country.
-    for code, name in sorted(ISO_COUNTRIES.items(), key=lambda item: len(item[1]), reverse=True):
+    for code, name in _COUNTRIES_BY_NAME_LENGTH:
         if re.search(rf"\b{re.escape(name)}\s+edition\b", text, re.IGNORECASE):
             return code
 
@@ -297,6 +306,9 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     for name, code in _NATIVE_COUNTRY_NAMES.items():
         if re.search(rf"\b{name}\s+edition\b", text, re.IGNORECASE):
             return code
+
+    # Uppercase for the code patterns below, without bare multi-word names.
+    text_upper = _MULTI_WORD_COUNTRY.sub(" ", text).upper()
 
     # Common English words that look like country codes but should be ignored
     common_words = {
