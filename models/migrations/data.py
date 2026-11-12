@@ -30,8 +30,9 @@ def _migrate_single_periodical(periodical: Periodical) -> bool:
     Returns:
         True if migration was performed, False if already migrated
     """
-    # Skip if already migrated (has parsed_metadata)
-    if periodical.parsed_metadata is not None:
+    # Skip if already migrated. JSON null loads as None, and a literal
+    # "null" string is the same unset value written by older drivers.
+    if not _parsed_metadata_is_unset(periodical.parsed_metadata):
         return False
 
     old_metadata = periodical.extra_metadata or {}
@@ -101,6 +102,15 @@ def _migrate_single_periodical(periodical: Periodical) -> bool:
     return True
 
 
+def _parsed_metadata_is_unset(value) -> bool:
+    """True for SQL NULL, JSON null, and the literal null string."""
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip().lower() == "null":
+        return True
+    return False
+
+
 def migrate_metadata_structure(session: Session) -> int:
     """
     Migrate all periodicals from old to new metadata structure.
@@ -133,14 +143,21 @@ def migrate_metadata_structure(session: Session) -> int:
     batch_size = 100
 
     # Re-query each batch. Offsetting a shrinking filter would skip rows.
+    # Stop if a batch still matches the filter but none of its rows change,
+    # which would otherwise spin forever.
     while True:
         periodicals = session.query(Periodical).filter(needs_migration).limit(batch_size).all()
         if not periodicals:
             break
+        progressed = 0
         for periodical in periodicals:
             if _migrate_single_periodical(periodical):
-                migrated_count += 1
+                progressed += 1
         session.commit()
+        migrated_count += progressed
+        if progressed == 0:
+            logger.warning("Stopping metadata migration; a batch made no progress")
+            break
 
     logger.info(f"✓ Migrated metadata structure for {migrated_count} periodical(s)")
     return migrated_count

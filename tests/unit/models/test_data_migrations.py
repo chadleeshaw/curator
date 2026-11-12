@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from models.database import Base, DiscoveredIssue, Periodical, PeriodicalTracking
@@ -47,6 +47,52 @@ def test_an_old_periodical_gains_parsed_metadata(test_db):
     session.refresh(magazine)
     assert magazine.parsed_metadata["file_scan"]["year"] == 2024
     assert magazine.parsed_metadata["file_scan"]["issue_number"] == "12"
+    assert migrate_metadata_structure(session) == 0
+    session.close()
+
+
+def test_raw_json_null_metadata_is_migrated_once(test_db):
+    engine, session_factory = test_db
+    session = session_factory()
+    magazine = Periodical(
+        user_id=1,
+        title="City Paper",
+        issue_date=datetime(2024, 3, 1),
+        file_path="/library/city-null.pdf",
+        extra_metadata={"parse_source": "file", "year": 2024, "month": "March"},
+    )
+    session.add(magazine)
+    session.commit()
+    magazine_id = magazine.id
+    session.execute(text("UPDATE periodicals SET parsed_metadata = 'null' WHERE id = :row_id"), {"row_id": magazine_id})
+    session.commit()
+    session.close()
+
+    session = session_factory()
+    assert migrate_metadata_structure(session) == 1
+    saved = session.get(Periodical, magazine_id)
+    assert saved.parsed_metadata["file_scan"]["year"] == 2024
+    assert migrate_metadata_structure(session) == 0
+    session.close()
+    engine.dispose()
+
+
+def test_a_batch_that_makes_no_progress_stops(test_db, monkeypatch):
+    _, session_factory = test_db
+    session = session_factory()
+    session.add(
+        Periodical(
+            user_id=1,
+            title="City Paper",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/library/stuck.pdf",
+            parsed_metadata=None,
+            extra_metadata={"year": 2024},
+        )
+    )
+    session.commit()
+    monkeypatch.setattr("models.migrations.data._migrate_single_periodical", lambda _periodical: False)
+
     assert migrate_metadata_structure(session) == 0
     session.close()
 
