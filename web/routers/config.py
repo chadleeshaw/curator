@@ -359,12 +359,14 @@ async def test_provider_connection(provider_config: Dict[str, Any], _username: s
 
         return result
 
+    except HTTPException:
+        raise
     except ValueError as e:
         # Configuration errors (e.g., missing API key)
         return error_response(str(e))
     except Exception as e:
         logger.error(f"Test provider connection error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal server error occurred")
+        raise HTTPException(status_code=500, detail="An internal server error occurred") from e
 
 
 @router.post("/test-download-client")
@@ -413,6 +415,8 @@ async def test_download_client_connection(client_config: Dict[str, Any], _userna
 
         return result
 
+    except HTTPException:
+        raise
     except ValueError as e:
         # Configuration errors (e.g., missing API key/password)
         return error_response(str(e))
