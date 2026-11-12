@@ -18,6 +18,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
+from core.utils.date_precision import precision_for_existing_row
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from services.cache.provider_cache import INDEXER_REJECTION_ERROR
 from core.constants.app import (
@@ -136,13 +137,23 @@ def _days_conflict(issue, magazine) -> bool:
     return True
 
 
+def _precision_for_match(record) -> Optional[str]:
+    """Stored precision, or the backfill guess when the column was never set."""
+    explicit = _date_precision(record)
+    if explicit:
+        return explicit
+    return precision_for_existing_row(getattr(record, "issue_date", None), *_metadata_sources(record))
+
+
 def _year_precision_conflict(issue, magazine) -> bool:
-    """A year-only date is not the month or day stored on the 1st of that year."""
-    wanted = _date_precision(issue)
-    owned = _date_precision(magazine)
+    """A year-only date is not a month, a day, or an older row with no precision.
+
+    A missing precision is read the same way the backfill reads it. January 1
+    with no recorded month is the month placeholder, not another year-only issue.
+    """
+    wanted = _precision_for_match(issue)
+    owned = _precision_for_match(magazine)
     if wanted != DATE_PRECISION_YEAR and owned != DATE_PRECISION_YEAR:
-        return False
-    if not wanted or not owned:
         return False
     return wanted != owned
 
