@@ -156,9 +156,11 @@ async def update_periodical(
 
             try:
                 periodical.issue_date = datetime(year, month_num, 1, tzinfo=UTC)
+                periodical.date_precision = "month" if month_num else "year"
             except ValueError:
                 logger.warning(f"Invalid date: year={year}, month={month_num}")
                 periodical.issue_date = datetime(year, 1, 1, tzinfo=UTC)
+                periodical.date_precision = "year"
 
         if "issue_number" in updates:
             periodical.derived_metadata["issue_number"] = {

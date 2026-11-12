@@ -205,6 +205,13 @@ class Parser:
             enriched_metadata["volume"] = nzb_metadata["volume"]
         if nzb_metadata.get("issue") is not None:
             enriched_metadata["issue"] = nzb_metadata["issue"]
+        if nzb_metadata.get("day") is not None:
+            enriched_metadata["day"] = nzb_metadata["day"]
+        if nzb_metadata.get("date_precision"):
+            enriched_metadata["date_precision"] = nzb_metadata["date_precision"]
+        elif publication_date and not extracted_date:
+            # A feed timestamp is not an issue day. Keep it month-level.
+            enriched_metadata["date_precision"] = "month"
 
         return ParsedSearchResult(
             title=cleaned_title,

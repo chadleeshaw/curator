@@ -25,6 +25,7 @@ from core.constants.app import (
     MAX_ERROR_LENGTH,
     NEW_ISSUE_THRESHOLD_DAYS,
 )
+from core.constants.date import DATE_PRECISION_DAY
 from core.constants.country import (
     FULL_NAME_COUNTRY_CODES,
     ISO_COUNTRIES,
@@ -52,6 +53,15 @@ _NEW_ISSUE_DAYS = 7
 _RECENT_ISSUE_DAYS = 30
 _MODERATE_ISSUE_DAYS = 90
 _TRACKING_PRIORITY_BOOST = 10
+
+
+def _precision_from_parsed(parsed) -> Optional[str]:
+    """Date precision recorded by the filename parser, if it ran."""
+    raw = getattr(parsed, "raw_metadata", None)
+    if not isinstance(raw, dict):
+        return None
+    precision = raw.get("date_precision")
+    return str(precision) if precision else None
 
 
 def _as_date(value):
@@ -88,30 +98,42 @@ def _first_present(sources, key):
     return None
 
 
-def _known_day(date_value, *sources) -> Optional[int]:
-    """Day of month when the source actually named one.
+def _date_precision(record) -> Optional[str]:
+    """Parsed precision, from the column or from stored metadata."""
+    column = getattr(record, "date_precision", None)
+    if column:
+        return str(column)
+    stored = _first_present(_metadata_sources(record), "date_precision")
+    return str(stored) if stored else None
 
-    A date stored as the 1st at midnight is the month-only default used for
-    "January 2024". A later day, an explicit day field, or a timestamp means
-    the day identifies the issue.
+
+def _known_day(record) -> Optional[int]:
+    """Calendar day when date_precision says the day was parsed.
+
+    Month-only and year-only dates are stored on the 1st. That placeholder is
+    not a known day, and neither is a time of day on the timestamp.
     """
-    explicit = _first_present(sources, "day")
-    if explicit not in (None, ""):
-        try:
-            day = int(explicit)
-        except (TypeError, ValueError):
-            day = None
-        else:
-            if 1 <= day <= 31:
-                return day
-    if not date_value:
+    if _date_precision(record) != DATE_PRECISION_DAY:
         return None
-    if isinstance(date_value, datetime) and (
-        date_value.hour or date_value.minute or date_value.second or date_value.microsecond
-    ):
-        return _as_date(date_value).day
-    day = _as_date(date_value).day
-    return day if day != 1 else None
+    issue_date = getattr(record, "issue_date", None)
+    if not issue_date:
+        return None
+    return _as_date(issue_date).day
+
+
+def _days_conflict(issue, magazine) -> bool:
+    """True when a named day does not belong to the other copy.
+
+    Two month-only dates do not conflict. A day-precision issue conflicts with
+    a month-only issue, and with another day-precision issue on a different day.
+    """
+    wanted = _known_day(issue)
+    owned = _known_day(magazine)
+    if wanted is None and owned is None:
+        return False
+    if wanted is not None and owned is not None:
+        return wanted != owned
+    return True
 
 
 def _edition_keyword(title: Optional[str]) -> Optional[str]:
@@ -202,9 +224,7 @@ def _same_library_issue(issue: DiscoveredIssue, magazine: Periodical) -> bool:
     if wanted.year != owned.year or wanted.month != owned.month:
         return False
 
-    wanted_day = _known_day(issue.issue_date, *_metadata_sources(issue))
-    owned_day = _known_day(magazine.issue_date, *_metadata_sources(magazine))
-    if wanted_day and owned_day and wanted_day != owned_day:
+    if _days_conflict(issue, magazine):
         return False
 
     wanted_number = _issue_number_of(issue)
@@ -454,6 +474,10 @@ class IssueDiscoveryService:
         if search_result_id and search_result_id not in existing.search_result_ids:
             existing.search_result_ids.append(search_result_id)
 
+        precision = _precision_from_parsed(parsed)
+        if precision:
+            existing.date_precision = precision
+
         url_changed = bool(existing.latest_url) and existing.latest_url != previous_url
         if existing.download_status == DownloadStatus.FAILED:
             if not url_changed:
@@ -495,6 +519,7 @@ class IssueDiscoveryService:
             normalized_title=parsed.cleaned_title.lower(),
             fuzzy_match_group=fuzzy_group,
             issue_date=parsed.publication_date,
+            date_precision=_precision_from_parsed(parsed),
             issue_number=parsed.raw_metadata.get("issue"),
             year=parsed.publication_date.year if parsed.publication_date else None,
             month=parsed.publication_date.month if parsed.publication_date else None,
@@ -983,12 +1008,11 @@ class IssueDiscoveryService:
         """
         Check if an issue is already in the library.
 
-        A library copy matches when the year and month agree. When both sides
-        know a day, an issue number, or an edition, those have to agree too:
-        the next week's paper, the next numbered issue, and a special edition
-        are not the monthly issue already on the shelf. The 1st of the month
-        with no time is the placeholder used for "January 2024", so it does
-        not by itself split a monthly.
+        A library copy matches when the year and month agree. ``date_precision``
+        says whether the day was parsed. A month-only issue does not own a
+        weekly or daily issue. Two day-precision dates have to fall on the same
+        day, including the 1st. Two month-only issues in that month are the
+        same copy unless the issue number or edition differs.
 
         If either side has no date, fall back to the fuzzy group id, which
         compares normalized titles.

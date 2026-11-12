@@ -1262,6 +1262,7 @@ class FileImporter:
             user_id=1,
             title=organization_title,
             issue_date=parsed.issue_date or datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC),
+            date_precision=(parsed.raw_metadata or {}).get("date_precision") if parsed.raw_metadata else None,
             language=parsed.language or DEFAULT_LANGUAGE,
             file_path=str(organized_path),
             cover_path=str(cover_path) if cover_path else None,

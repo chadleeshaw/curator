@@ -176,11 +176,13 @@ class TestNeighboringMonthIsADifferentIssue:
 class TestWeekliesAndSpecialsAreDistinctIssues:
     """A shared year and month is not enough when a closer identity is known."""
 
-    def _pair(self, session, tracking, owned_date, wanted_date):
+    def _pair(self, session, tracking, owned_date, wanted_date, precision="day"):
         owned = _library_issue(session, tracking, owned_date.month, owned_date.year)
         owned.issue_date = owned_date
+        owned.date_precision = precision
         wanted = _discovered(session, tracking, wanted_date.month, wanted_date.year)
         wanted.issue_date = wanted_date
+        wanted.date_precision = precision
         wanted.fuzzy_match_group = get_fuzzy_group_id(owned.title)
         session.commit()
         return owned, wanted
@@ -216,7 +218,7 @@ class TestWeekliesAndSpecialsAreDistinctIssues:
         _, session_factory = test_db
         session = session_factory()
         tracking = _tracking(session, title="City Paper")
-        _, wanted = self._pair(session, tracking, datetime(2024, 1, 1, 8, 0), datetime(2024, 1, 8, 8, 0))
+        _, wanted = self._pair(session, tracking, datetime(2024, 1, 1), datetime(2024, 1, 8))
 
         stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
 
@@ -288,6 +290,99 @@ class TestWeekliesAndSpecialsAreDistinctIssues:
         session.refresh(wanted)
         assert stats["already_have"] == 1
         assert wanted.periodical_id == owned.id
+        session.close()
+
+
+class TestDatePrecisionNotTheClock:
+    """The day is known only when date_precision says so."""
+
+    def _owned_and_wanted(self, session, tracking, owned_precision, wanted_precision, owned_day, wanted_day):
+        owned = _library_issue(session, tracking, 1)
+        owned.issue_date = datetime(2024, 1, owned_day)
+        owned.date_precision = owned_precision
+        wanted = _discovered(session, tracking, 1)
+        wanted.issue_date = datetime(2024, 1, wanted_day)
+        wanted.date_precision = wanted_precision
+        wanted.fuzzy_match_group = get_fuzzy_group_id(owned.title)
+        session.commit()
+        return owned, wanted
+
+    def test_a_month_only_issue_does_not_block_a_later_week(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "month", "day", 1, 14)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_month_only_issue_does_not_block_a_different_issue_number(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, "month", "month", 1, 1)
+        owned.derived_metadata = {"issue_number": {"value": "12", "source": "file_scan", "confidence": 1}}
+        wanted.issue_number = "13"
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_genuine_first_is_compared_by_day(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, later = self._owned_and_wanted(session, tracking, "day", "day", 1, 8)
+        same = _discovered(session, tracking, 1)
+        same.issue_date = datetime(2024, 1, 1)
+        same.date_precision = "day"
+        same.fuzzy_match_group = "city-paper-jan-1"
+        same.title = "City Paper 2024-01-01"
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(later)
+        session.refresh(same)
+        assert later.download_status == DownloadStatus.WANTED
+        assert later.periodical_id is None
+        assert same.download_status == DownloadStatus.COMPLETED
+        session.close()
+
+    def test_two_month_only_issues_in_the_same_month_are_duplicates(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, "month", "month", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+    def test_two_month_only_issues_with_different_editions_are_not_duplicates(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "month", "month", 1, 1)
+        wanted.extra_metadata = {"is_special_edition": True, "special_edition_name": "Holiday Special"}
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
         session.close()
 
 

@@ -2,6 +2,12 @@
 Date and month parsing constants
 """
 
+# How much of a date was actually parsed. Matching uses this instead of
+# guessing from a timestamp stored at midnight on the 1st.
+DATE_PRECISION_DAY = "day"
+DATE_PRECISION_MONTH = "month"
+DATE_PRECISION_YEAR = "year"
+
 # ==============================================================================
 # Month Mappings
 # ==============================================================================

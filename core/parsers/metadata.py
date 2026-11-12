@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from core.constants.date import (
+    DATE_PRECISION_DAY,
+    DATE_PRECISION_MONTH,
+    DATE_PRECISION_YEAR,
     MAX_VALID_YEAR,
     MIN_VALID_YEAR,
     MONTH_TO_NUMBER,
@@ -59,6 +62,25 @@ from core.parsers.date import parse_month, parse_multi_month, parse_numeric_mont
 from core.utils.text import clean_title
 
 logger = logging.getLogger(__name__)
+
+
+def stamp_date_precision(metadata: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Record whether a parsed date named a day, a month, or only a year.
+
+    An explicit ``day`` field is the signal. A timestamp of midnight on the 1st
+    is only the placeholder used for month-only and year-only dates, so it does
+    not by itself mean the day was known. A precision already set by the parser
+    (for example year-only) is left alone.
+    """
+    if not isinstance(metadata, dict) or metadata.get("date_precision"):
+        return metadata
+    if metadata.get("day") is not None:
+        metadata["date_precision"] = DATE_PRECISION_DAY
+    elif metadata.get("month") is not None:
+        metadata["date_precision"] = DATE_PRECISION_MONTH
+    elif metadata.get("year") is not None:
+        metadata["date_precision"] = DATE_PRECISION_YEAR
+    return metadata
 
 
 class FilenameParser:
@@ -160,6 +182,7 @@ class FilenameParser:
 
         # Calculate confidence score
         metadata["confidence"] = self._calculate_confidence(metadata)
+        stamp_date_precision(metadata)
 
         logger.debug(f"Extracted NZB metadata from '{original_title}': {metadata}")
         return metadata
@@ -612,6 +635,7 @@ class FilenameParser:
 
         # No month name found — default to January (genuine year-only titles like "Magazine 2024")
         metadata["month"] = 1
+        metadata["date_precision"] = DATE_PRECISION_YEAR
         metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         return remaining_text, True
 
@@ -786,7 +810,7 @@ class FilenameParser:
         )
 
         if result:
-            return result
+            return stamp_date_precision(result)
 
         # Final fallback: Try enhanced NZB-style parsing for other complex filenames
         logger.info(f"Standard patterns failed, trying NZB-style parsing: {filename}")
@@ -795,7 +819,7 @@ class FilenameParser:
         # Check if result is None (rejected as non-periodical)
         if nzb_result is None:
             logger.info(f"NZB parser rejected '{filename}' as non-periodical content, using fallback metadata")
-            return metadata
+            return stamp_date_precision(metadata)
 
         # Only use NZB result if it has medium/high confidence
         if nzb_result.get("confidence") in ["medium", "high"]:
@@ -811,7 +835,7 @@ class FilenameParser:
 
         logger.info(f"No date pattern matched in filename: {filename}, using current date")
         metadata["pattern"] = "no_match_fallback"
-        return metadata
+        return stamp_date_precision(metadata)
 
     def _try_multi_month_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -1322,6 +1346,7 @@ class FilenameParser:
 
         metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         metadata["year"] = year
+        metadata["date_precision"] = DATE_PRECISION_YEAR
         metadata["pattern"] = "year_only"
 
         # Try to extract title from text before the year in the filename
