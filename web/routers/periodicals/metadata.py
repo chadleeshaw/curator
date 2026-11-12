@@ -113,8 +113,17 @@ async def update_periodical(
 
         has_tracking = periodical.tracking_id is not None
 
-        if "language" in updates and not has_tracking:
-            periodical.language = updates["language"]
+        if "language" in updates and updates["language"]:
+            if has_tracking:
+                from models.database import Periodical, PeriodicalTracking
+
+                tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == periodical.tracking_id).first()
+                if tracking is not None:
+                    tracking.language = updates["language"]
+                    for issue in db.query(Periodical).filter(Periodical.tracking_id == tracking.id):
+                        issue.language = updates["language"]
+            else:
+                periodical.language = updates["language"]
 
         if periodical.extra_metadata is None:
             periodical.extra_metadata = {}

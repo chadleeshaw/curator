@@ -31,7 +31,8 @@ class TestDetectCountry:
     def test_detect_au(self):
         """Test detecting Australia from text."""
         assert detect_country("Magazine AU Edition") == "AU"
-        assert detect_country("Magazine Australia") == "AU"
+        assert detect_country("Magazine Australia") is None
+        assert detect_country("Australia Edition") == "AU"
 
     def test_detect_ca(self):
         """Test detecting Canada from text."""
@@ -67,11 +68,12 @@ class TestDetectCountry:
         # UK code
         assert detect_country("Magazine UK") == "UK"
         assert detect_country("[UK]") == "UK"
-        # Full name
-        assert detect_country("United Kingdom") == "UK"
+        # A country name is an edition only in an edition phrase.
+        assert detect_country("United Kingdom") is None
+        assert detect_country("United Kingdom Edition") == "UK"
         # AU code
         assert detect_country("Magazine AU") == "AU"
-        assert detect_country("Australia") == "AU"
+        assert detect_country("Australia") is None
 
 
 class TestFindCountry:
@@ -191,7 +193,10 @@ class TestCountryDetectionIntegration:
     def test_detect_from_filename(self):
         """Test country detection from typical filenames."""
         assert detect_country("Wired Magazine UK - Jan2024.pdf") == "UK"
-        assert detect_country("National Geographic Australia March 2024.pdf") == "AU"
+        assert detect_country("National Geographic Australia March 2024.pdf") is None
+        assert detect_country("North Title Sweden January 2024") is None
+        assert detect_country("North Title Sweden Edition") == "SE"
+        assert detect_country("North Title [SE]") == "SE"
 
     def test_detect_from_search_results(self):
         """Test country detection from search result titles."""

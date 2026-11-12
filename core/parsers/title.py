@@ -27,9 +27,152 @@ from core.constants.title import (
     KNOWN_PERIODICAL_TITLES,
     SPECIAL_EDITION_KEYWORDS,
 )
+from core.constants.date import MONTH_TO_NUMBER
 from core.parsers.language import LANGUAGE_INDICATORS
 
 logger = logging.getLogger(__name__)
+
+# Words that look like a title qualifier, not a person named after a hyphen.
+_NOT_A_NAME_WORD = {
+    "a",
+    "an",
+    "and",
+    "of",
+    "the",
+    "special",
+    "edition",
+    "annual",
+    "collector",
+    "collectors",
+    "holiday",
+    "christmas",
+    "summer",
+    "winter",
+    "spring",
+    "fall",
+    "autumn",
+    "vol",
+    "volume",
+    "issue",
+    "no",
+    "number",
+    "magazine",
+    "mag",
+    "uk",
+    "us",
+    "usa",
+}
+_NAME_WORD = re.compile(r"^[A-Za-z][A-Za-z'’.-]*$")
+# A real site suffix. A magazine token such as "Title" is not one.
+_SITE_TLD = (
+    r"(?:info|biz|xyz|com|net|org|io|me|tv|cc|ws|to|us|fr|es|it|se|no|dk|pl|cz|be|at|ch|"
+    r"au|nz|ca|jp|kr|cn|uk|de|nl|ru|eu|co)"
+)
+_SITE_HOST = rf"(?:www\.)?[-a-z0-9-]{{1,256}}\.{_SITE_TLD}(?:\.(?:uk|au|nz|br|za|jp|kr|cn))?"
+
+
+def _strip_file_extension(title: str) -> str:
+    """Drop a trailing file suffix. A site suffix such as .com stays."""
+    match = re.search(r"\.([A-Za-z0-9]{2,4})$", title)
+    if match and not re.fullmatch(_SITE_TLD, match.group(1), flags=re.IGNORECASE):
+        return title[: match.start()]
+    return title
+
+
+def _collapse_plus_spellings(title: str) -> str:
+    """137Plus and 137 Plus are the same magazine name as 137+."""
+    return re.sub(r"(?<!\d)(\d{1,3})[\s._-]*plus\b", r"\1+", title, flags=re.IGNORECASE)
+
+
+def _restore_region_case(title: str) -> str:
+    """Keep UK and US uppercase after title case."""
+    title = re.sub(r"\bUk\b", "UK", title)
+    return re.sub(r"\bUs\b", "US", title)
+
+
+def _case_known_title(title: str) -> str:
+    """Use a known magazine's casing, including when a suffix follows the name."""
+    lowered = title.lower()
+    exact = KNOWN_PERIODICAL_TITLES.get(lowered)
+    if exact:
+        return exact
+
+    for key in sorted(KNOWN_PERIODICAL_TITLES, key=len, reverse=True):
+        if not lowered.startswith(key):
+            continue
+        if len(lowered) > len(key) and lowered[len(key)].isalnum():
+            continue
+        suffix = _restore_region_case(title[len(key) :].title())
+        return KNOWN_PERIODICAL_TITLES[key] + suffix
+
+    return _restore_region_case(title.title())
+
+
+def _is_plus_title(part: str) -> bool:
+    """A magazine whose name is a short number and a plus, not an issue number."""
+    return bool(re.fullmatch(r"\d{1,3}\+", part))
+
+
+def _is_issue_token(part: str) -> bool:
+    """A hyphen segment that is only an issue number or a Name12 credit."""
+    return bool(re.fullmatch(r"\d{1,3}", part) or re.fullmatch(r"[A-Za-z]{2,}\d{1,3}", part))
+
+
+def _is_personal_name(part: str) -> bool:
+    """Two to four plain words, such as "Alex Morgan". "UK" and "Special Edition" are not."""
+    words = part.split()
+    if not words or len(words) > 4:
+        return False
+    if re.fullmatch(r"\d{1,3}", words[-1]):
+        words = words[:-1]
+    if len(words) < 2:
+        return False
+
+    blocked = _NOT_A_NAME_WORD | set(MONTH_TO_NUMBER)
+    for word in words:
+        if not _NAME_WORD.match(word) or len(word) < 2 or word.lower() in blocked:
+            return False
+    return True
+
+
+def _segment_has_title(part: str) -> bool:
+    if _is_plus_title(part):
+        return True
+    return bool(re.search(r"[A-Za-z]", part) and not _is_issue_token(part))
+
+
+def strip_issue_number_and_name(title: str) -> str:
+    """Drop a leading issue number and a trailing credit from a magazine title.
+
+    "137 - North Title - Alex Morgan" is the magazine "North Title". A credit is
+    removed only when a magazine name remains. A 4-digit name such as "2600", and
+    a name that is a short number followed by a plus, are kept. 137Plus and
+    137 Plus collapse to that plus form.
+    """
+    if not title:
+        return title
+
+    title = _collapse_plus_spellings(title)
+    parts = [part.strip() for part in re.split(r"\s+-\s+", title) if part.strip()]
+    while len(parts) > 1:
+        last = parts[-1]
+        if _is_issue_token(last):
+            parts.pop()
+            continue
+        if _is_personal_name(last) and any(_segment_has_title(part) for part in parts[:-1]):
+            parts.pop()
+            continue
+        break
+
+    if len(parts) > 1 and re.fullmatch(r"\d{1,3}", parts[0]):
+        parts = parts[1:]
+
+    title = " - ".join(parts)
+    stripped = re.sub(r"^\d{1,3}\s*-\s+(?=[A-Za-z])", "", title)
+    stripped = re.sub(r"^\d{1,3}\s+(?=[A-Za-z])", "", stripped).strip()
+    if stripped and re.search(r"[A-Za-z]", stripped):
+        title = stripped
+    return title.strip()
 
 
 class TitleMatcher:
@@ -138,8 +281,11 @@ class TitleMatcher:
         if not title:
             return title
 
-        # Remove file extension
-        title = re.sub(r"\.[a-z0-9]{2,4}$", "", title, flags=re.IGNORECASE)
+        # Before extension and site cleanup, so "137.Plus.pdf" is not read as a domain.
+        title = _collapse_plus_spellings(title)
+
+        # Remove a file extension. Leave .com and other site suffixes for the host rule.
+        title = _strip_file_extension(title)
 
         # Remove category prefixes like [Magazine], [Comic], [Newspaper], [Book]
         title = re.sub(
@@ -150,9 +296,9 @@ class TitleMatcher:
         )
 
         # Remove website prefixes: [www.site.com] or www.site.com -
+        # The suffix has to be a real site suffix. "North.Title-Jan" is a magazine name.
         title = re.sub(
-            r"^(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\."
-            r"(?:[a-z]{2,6}(?:\.[a-z]{2,6})?|xn--[a-z0-9-]{4,})\b(?:\s*\]|[-\s]{1,})",
+            rf"^(?:\[\s*)?{_SITE_HOST}\b(?:\s*\]|\s+[-\s]*|-(?=[A-Za-z]))",
             "",
             title,
             flags=re.IGNORECASE,
@@ -160,7 +306,7 @@ class TitleMatcher:
 
         # Remove website postfixes: www.site.com] at end
         title = re.sub(
-            r"(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\.(?:xn--[a-z0-9-]{4,}|[a-z]{2,6})(?:\s*\])?$",
+            rf"(?:\s|\[){_SITE_HOST}\]?\s*$",
             "",
             title,
             flags=re.IGNORECASE,
@@ -262,7 +408,7 @@ class TitleMatcher:
         # Match with or without leading dash/hyphen
         title = re.sub(
             r"\s*-?\s*(?:January|February|March|April|May|June|July|August|September|October|November|December|"
-            r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(?:19|20)\d{2}",
+            r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s*(?:19|20)\d{2}",
             "",
             title,
             flags=re.IGNORECASE,
@@ -275,6 +421,7 @@ class TitleMatcher:
             title,
             flags=re.IGNORECASE,
         )
+        title = strip_issue_number_and_name(title)
         title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
         # Remove standalone format indicators (E Book, eBook, Digital, PDF, TruePDF, etc.)
@@ -292,21 +439,7 @@ class TitleMatcher:
         # Remove trailing hyphens/dashes (left over from tag removal)
         title = re.sub(r"[-\s]+$", "", title).strip()
 
-        # Title case (capitalize first letter of each word)
-        # But preserve special formatting for common periodicals
-        title_lower = title.lower()
-        if title_lower in KNOWN_PERIODICAL_TITLES:
-            return KNOWN_PERIODICAL_TITLES[title_lower]
-
-        # Default title case for others
-        title = title.title()
-
-        # Preserve uppercase for common country codes (UK, US)
-        # This prevents "Uk" and "Us" from appearing in titles
-        title = re.sub(r"\bUk\b", "UK", title)
-        title = re.sub(r"\bUs\b", "US", title)
-
-        return title
+        return _case_known_title(title)
 
     def parse_with_patterns(self, title: str) -> Optional[Dict[str, str]]:
         """

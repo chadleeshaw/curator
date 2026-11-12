@@ -281,16 +281,13 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     # Convert to uppercase for pattern matching
     text_upper = text.upper()
 
-    # CRITICAL: Check full country names FIRST, before 2-3 letter patterns
-    # This prevents "New Zealand" from matching "NE" (Niger) or "GQ"
-    # Multi-word country names must be checked before extracting short codes
-    for code, name in ISO_COUNTRIES.items():
-        # Match full country name with word boundaries
-        if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
+    # A country name counts only as an edition phrase, such as "Sweden Edition".
+    # A bare "Sweden" stays in the title and does not set the country.
+    for code, name in sorted(ISO_COUNTRIES.items(), key=lambda item: len(item[1]), reverse=True):
+        if re.search(rf"\b{re.escape(name)}\s+edition\b", text, re.IGNORECASE):
             return code
 
-    # Special handling for "South Africa" must come before "Africa" check
-    if re.search(r"\bSouth[\s\.]Africa\b", text, re.IGNORECASE):
+    if re.search(r"\bSouth[\s\.]Africa\s+edition\b", text, re.IGNORECASE):
         return "ZA"
 
     # Common English words that look like country codes but should be ignored
@@ -354,13 +351,5 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
                 # Return the matched code, not the first code for the name
                 # This preserves the original code format (e.g., UK, US)
                 return match if len(match) == 2 else match[:2]
-
-    # Special handling for "Nederland" (Dutch for Netherlands)
-    if re.search(r"\bNederland", text, re.IGNORECASE):
-        return "NL"  # Netherlands
-
-    # Special handling for "Slovenija" (Slovenian for Slovenia)
-    if re.search(r"\bSlovenija\b", text, re.IGNORECASE):
-        return "SI"  # Slovenia
 
     return default

@@ -76,6 +76,7 @@ async def bulk_move_to_tracking(request: BulkMoveRequest, _username: str = Depen
         moved_count = 0
         failed_ids = []
         dirs_to_cleanup = []
+        source_ids = set()
 
         # Use no_autoflush to prevent premature flushes when querying the next
         # periodical while previous ones have dirty file_path changes.
@@ -94,7 +95,10 @@ async def bulk_move_to_tracking(request: BulkMoveRequest, _username: str = Depen
                 # Use a savepoint so a single failure doesn't roll back the whole batch
                 savepoint = db.begin_nested()
                 try:
+                    old_tracking_id = periodical.tracking_id
                     periodical.tracking_id = request.target_tracking_id
+                    if target_tracking.language:
+                        periodical.language = target_tracking.language
 
                     is_special = is_periodical_special_edition(periodical)
 
@@ -124,6 +128,8 @@ async def bulk_move_to_tracking(request: BulkMoveRequest, _username: str = Depen
                     db.flush()
                     savepoint.commit()
                     moved_count += 1
+                    if old_tracking_id and old_tracking_id != request.target_tracking_id:
+                        source_ids.add(old_tracking_id)
 
                 except IntegrityError as e:
                     savepoint.rollback()
@@ -133,6 +139,9 @@ async def bulk_move_to_tracking(request: BulkMoveRequest, _username: str = Depen
                     savepoint.rollback()
                     failed_ids.append(periodical_id)
                     logger.error(f"Error moving periodical {periodical_id}: {e}")
+
+        for source_id in source_ids:
+            _shared.retire_empty_source_tracking(db, source_id, request.target_tracking_id)
 
         db.commit()
 

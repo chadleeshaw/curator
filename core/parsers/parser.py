@@ -4,6 +4,7 @@ Delegates to specialized parsers and returns standardized dataclasses.
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -65,6 +66,11 @@ class Parser:
 
         # Clean and normalize title
         cleaned_title = self.title_matcher.clean_release_title(title)
+        # A file named only with its issue number takes the magazine folder name.
+        if re.fullmatch(r"\d{1,3}", (cleaned_title or "").strip()) and filepath_data.title_from_path:
+            from_folder = self.title_matcher.clean_release_title(filepath_data.title_from_path)
+            if from_folder and not re.fullmatch(r"\d{1,3}", from_folder.strip()):
+                cleaned_title = from_folder
         base_title, is_special, special_name = self.title_matcher.extract_base_title(cleaned_title)
 
         # Detect language and country from full path

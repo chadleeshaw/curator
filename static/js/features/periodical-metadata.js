@@ -329,16 +329,16 @@ export function enableMetadataEdit() {
   const languageField = document.getElementById('edit-language');
   languageField.value = _state.currentPeriodicalData.language || '';
 
-  // Disable language if controlled by tracking
+  // Language on a tracked issue is the tracking language. Saving it updates
+  // every issue, so a copy labeled with the wrong language can be set back
+  // to English without a second tracking record.
   const languageContainer = document.getElementById('edit-language-container');
-  if (hasTracking) {
-    languageField.disabled = true;
-    languageContainer.title = 'Language is controlled by the tracking record';
-    languageContainer.style.opacity = '0.6';
-  } else {
-    languageField.disabled = false;
-    languageContainer.title = '';
-    languageContainer.style.opacity = '1';
+  const languageHint = document.getElementById('edit-language-hint');
+  languageField.disabled = false;
+  languageContainer.title = '';
+  languageContainer.style.opacity = '1';
+  if (languageHint) {
+    languageHint.classList.toggle(CSS_CLASSES.HIDDEN, !hasTracking);
   }
 
   // Year field - read from derived_metadata first, fall back to extra_metadata
@@ -542,9 +542,15 @@ export async function saveMetadataEdit() {
     volume: document.getElementById('edit-volume').value || null,
   };
 
-  // Only include tracking-controlled fields if issue is NOT linked to tracking
+  // Only include tracking-controlled fields if issue is NOT linked to tracking.
+  // Language is the exception: on a tracked issue it updates the tracking
+  // record, and every issue of that magazine, when the user changes it.
+  const selectedLanguage = document.getElementById('edit-language').value;
+  const currentLanguage = _state.currentPeriodicalData.language || '';
+  if (!hasTracking || selectedLanguage !== currentLanguage) {
+    updates.language = selectedLanguage;
+  }
   if (!hasTracking) {
-    updates.language = document.getElementById('edit-language').value;
     updates.country = document.getElementById('edit-country').value || null;
   }
 

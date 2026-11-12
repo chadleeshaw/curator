@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models.database import Base, Periodical, PeriodicalTracking
+from models.database import Base, DiscoveredIssue, DownloadSubmission, Periodical, PeriodicalTracking
 
 # Import the periodicals router package
 from web.routers.periodicals import _shared
@@ -217,6 +217,104 @@ class TestBulkMoveToTracking:
         assert response.status_code == 200
         data = response.json()
         assert data["moved_count"] == 0  # All skipped
+
+    def test_bulk_move_of_last_issues_removes_source_and_copies_language(self, test_client, test_db, tmp_path):
+        """Moving the last issues drops the empty tracking and takes the target language."""
+        _, session_factory = test_db
+        session = session_factory()
+        source = PeriodicalTracking(
+            olid="OL_SOURCE",
+            title="North Title",
+            language="Spanish",
+            category="Magazines",
+            user_id=1,
+        )
+        target = PeriodicalTracking(
+            olid="OL_TARGET",
+            title="North Title",
+            language="English",
+            category="Magazines",
+            user_id=1,
+        )
+        session.add_all([source, target])
+        session.commit()
+        library_dir = tmp_path / "library"
+        library_dir.mkdir(exist_ok=True)
+        pdf_path = library_dir / "issue.pdf"
+        pdf_path.write_text("fake pdf content")
+        issue = Periodical(
+            title="North Title",
+            language="Spanish",
+            category="Magazines",
+            file_path=str(pdf_path),
+            tracking_id=source.id,
+            issue_date=datetime(2024, 1, 1),
+            user_id=1,
+        )
+        session.add(issue)
+        session.add(
+            DownloadSubmission(
+                user_id=1,
+                tracking_id=source.id,
+                source_url="http://example.com/north-title",
+                result_title="North Title",
+            )
+        )
+        session.add(
+            DiscoveredIssue(
+                user_id=1,
+                tracking_id=source.id,
+                title="North Title",
+                normalized_title="north title",
+                fuzzy_match_group="north title",
+            )
+        )
+        session.commit()
+        issue_id = issue.id
+        source_id = source.id
+        target_id = target.id
+        session.close()
+
+        with patch("web.routers.periodicals.bulk.reorganize_periodical_files") as mock_reorg:
+            mock_result = MagicMock()
+            mock_result.success = True
+            mock_result.files_moved = False
+            mock_reorg.return_value = mock_result
+            response = test_client.post(
+                "/api/periodicals/bulk/move-to-tracking",
+                json={"periodical_ids": [issue_id], "target_tracking_id": target_id},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["moved_count"] == 1
+        session = session_factory()
+        moved = session.query(Periodical).one()
+        assert moved.tracking_id == target_id
+        assert moved.language == "English"
+        assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one_or_none() is None
+        assert session.query(DownloadSubmission).one().tracking_id == target_id
+        assert session.query(DiscoveredIssue).one().tracking_id == target_id
+        session.close()
+
+    def test_bulk_move_keeps_source_while_an_issue_remains(self, test_client, test_db, tracking_records, sample_issues):
+        """A tracking row stays when one of its issues is still there."""
+        tracking_a_id, tracking_b_id = tracking_records
+        _, session_factory = test_db
+
+        with patch("web.routers.periodicals.bulk.reorganize_periodical_files") as mock_reorg:
+            mock_result = MagicMock()
+            mock_result.success = True
+            mock_result.files_moved = False
+            mock_reorg.return_value = mock_result
+            response = test_client.post(
+                "/api/periodicals/bulk/move-to-tracking",
+                json={"periodical_ids": sample_issues[:1], "target_tracking_id": tracking_b_id},
+            )
+
+        assert response.status_code == 200
+        session = session_factory()
+        assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_a_id).one() is not None
+        session.close()
 
 
 class TestBulkDelete:

@@ -5,6 +5,7 @@ Tests for automatic language inference from country detection.
 # Path setup handled by conftest.py
 
 from core.parsers import Parser
+from core.parsers.language import detect_language
 
 
 def test_german_inferred_from_de_country():
@@ -71,7 +72,7 @@ def test_italian_inferred_from_it_country():
 
 
 def test_italian_inferred_from_italia():
-    """Test that Italian is inferred from 'Italia' keyword"""
+    """A bare country name does not select the language or the country."""
     parser = Parser()
 
     result = parser.parse_search_result(
@@ -80,9 +81,8 @@ def test_italian_inferred_from_italia():
         provider="test",
     )
 
-    # Should detect Italian language and IT country from "Italia"
-    assert result.language == "Italian"
-    # Country detection depends on find_country which looks for "Italia" -> "IT"
+    assert result.language == "English"
+    assert result.country is None
 
 
 def test_portuguese_inferred_from_pt_country():
@@ -162,6 +162,34 @@ def test_explicit_language_overrides_country_inference():
     assert result.language == "German"
 
 
+def test_bare_country_name_stays_english():
+    """The word Sweden does not make the release a Swedish edition."""
+    parser = Parser()
+
+    result = parser.parse_search_result(
+        title="North Title Sweden January 2024",
+        url="http://example.com/download",
+        provider="test",
+    )
+
+    assert result.country is None
+    assert result.language == "English"
+
+
+def test_sweden_edition_phrase_infers_swedish():
+    """Sweden Edition is a country edition, so the language follows the country."""
+    parser = Parser()
+
+    result = parser.parse_search_result(
+        title="North Title Sweden Edition January 2024",
+        url="http://example.com/download",
+        provider="test",
+    )
+
+    assert result.country == "SE"
+    assert result.language == "Swedish"
+
+
 def test_no_country_keeps_default_language():
     """Test that without country detection, language stays default"""
     parser = Parser()
@@ -176,6 +204,26 @@ def test_no_country_keeps_default_language():
     assert result.country is None
     # Should remain default (English)
     assert result.language == "English"
+
+
+def test_domain_and_english_it_stay_english():
+    """A .es domain and the English word "it" are not language tags."""
+    assert detect_language("http://www.example.es/magazine January 2024") == "English"
+    assert detect_language("North Title has it covered January 2024") == "English"
+
+
+def test_tagged_codes_and_edition_phrases_select_a_language():
+    """A language counts inside a tag or an edition phrase."""
+    assert detect_language("North Title [IT] January 2024") == "Italian"
+    assert detect_language("Wired Italia December 2024") == "English"
+    assert detect_language("North Title.ES.January 2024") == "Spanish"
+    assert detect_language("North Title GERMAN January 2024") == "English"
+    assert detect_language("/library/German/North Title January 2024.pdf") == "German"
+    assert detect_language("North Title German Edition") == "German"
+    assert detect_language("North Title.German.January 2024") == "German"
+    assert detect_language("North Title Swedish Edition") == "Swedish"
+    assert detect_language("North Title [DE] January 2024") == "German"
+    assert detect_language("North Title [ES] January 2024") == "Spanish"
 
 
 def test_chinese_inferred_from_cn_country():

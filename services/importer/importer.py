@@ -51,6 +51,19 @@ from services.text_scan_service import TextScanService
 logger = logging.getLogger(__name__)
 
 
+def _unusable_tracking_title(title: str) -> bool:
+    """A leftover issue number or the word Magazine is not a magazine name.
+
+    A 4-digit name such as 2600, and a short number followed by a plus, stay.
+    """
+    cleaned = (title or "").strip()
+    if re.fullmatch(r"mag(?:azine)?", cleaned, flags=re.IGNORECASE):
+        return True
+    if re.fullmatch(r"\d{1,3}", cleaned):
+        return True
+    return bool(re.match(r"^\d{1,3}\s", cleaned))
+
+
 class FileImporter:
     """Import and process PDF files from downloads folder"""
 
@@ -606,18 +619,11 @@ class FileImporter:
             periodical.tracking_id = target_tracking.id
             target_tracking.last_metadata_update = datetime.now(UTC)
 
-            # Synchronize language between tracking and periodical
-            if target_tracking.language:
-                periodical.language = target_tracking.language
-                logger.debug(
-                    f"Synchronized language to '{target_tracking.language}' from tracking for: {target_tracking.title}"
-                )
-            elif parsed_language:
+            # The issue keeps the language it was parsed with. Fill an empty tracking record
+            # from that language. A language edit on an issue still updates the whole record.
+            if not target_tracking.language and parsed_language:
                 target_tracking.language = parsed_language
-                periodical.language = parsed_language
-                logger.debug(
-                    f"Set tracking and periodical language to '{parsed_language}' for: {target_tracking.title}"
-                )
+                logger.debug(f"Set tracking language to '{parsed_language}' for: {target_tracking.title}")
 
             logger.debug(f"Linked periodical to tracking: {target_tracking.title} (ID: {target_tracking.id})")
 
@@ -629,6 +635,8 @@ class FileImporter:
                     target_tracking.selected_editions[special_name] = True
                     logger.debug(f"Added special edition '{special_name}' to tracking: {target_tracking.title}")
 
+        elif auto_track and _unusable_tracking_title(tracking_title):
+            logger.info(f"Skipped auto-tracking an unusable title: {tracking_title}")
         elif auto_track:
             olid = generate_olid(tracking_title)
             track_all_editions = tracking_mode == "all"
