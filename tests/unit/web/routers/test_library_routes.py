@@ -361,9 +361,7 @@ class TestStackRoutes:
         assert len(memberships) == 1
         assert memberships[0].periodical_id == lonely_id
         home_stack = session.query(Stack).filter(Stack.slug == "home").one()
-        other_membership = (
-            session.query(StackMembership).filter(StackMembership.stack_id == home_stack.id).count()
-        )
+        other_membership = session.query(StackMembership).filter(StackMembership.stack_id == home_stack.id).count()
         assert other_membership == 0
         travel_membership_id = memberships[0].id
         session.close()
@@ -435,9 +433,7 @@ class TestPeriodicalCrudRoutes:
     def test_list_groups_tracked_issues_and_returns_fields(self, test_client, test_db):
         tracking_id = _insert_tracking(test_db, olid="OLATL", title="The Atlantic")
         session = _session(test_db)
-        session.add(
-            Stack(user_id=1, name="Favorites", slug="favorites", description="Kept titles")
-        )
+        session.add(Stack(user_id=1, name="Favorites", slug="favorites", description="Kept titles"))
         session.commit()
         stack = session.query(Stack).filter(Stack.slug == "favorites").one()
         session.add(StackMembership(stack_id=stack.id, periodical_tracking_id=tracking_id))
@@ -652,9 +648,7 @@ class TestPeriodicalCrudRoutes:
 
         assert response.status_code == 200
         assert response.json()["success"] is True
-        assert response.json()["message"] == (
-            "Removed 2 issues of 'Wired' from library (files retained on disk)"
-        )
+        assert response.json()["message"] == ("Removed 2 issues of 'Wired' from library (files retained on disk)")
 
         session = _session(test_db)
         remaining = {(row.title, row.language, row.id) for row in session.query(Periodical).all()}
