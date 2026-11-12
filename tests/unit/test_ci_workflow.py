@@ -38,6 +38,15 @@ def test_pull_requests_build_without_pushing_and_check_the_runtime_user():
     assert "docker logs" in logs["run"]
 
 
+def test_readme_uses_the_registry_ci_publishes():
+    readme = (WORKFLOW.parents[2] / "README.md").read_text()
+    workflow = WORKFLOW.read_text()
+    assert "REGISTRY: ghcr.io" in workflow
+    assert "ghcr.io/chadleeshaw/curator:latest" in readme
+    assert "image: chadleeshaw/curator:latest" not in readme
+    assert "\n  chadleeshaw/curator:latest\n" not in readme
+
+
 def test_release_images_include_arm64():
     publish = _workflow()["jobs"]["build-and-push"]
     build = _step(publish, "Build and push Docker image")
