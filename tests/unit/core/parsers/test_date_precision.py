@@ -1,5 +1,8 @@
 """Date precision comes from what the parser named, not from midnight on the 1st."""
 
+import importlib.util
+from pathlib import Path
+
 from core.parsers.metadata import FilenameParser
 from core.utils.date_precision import precision_for_existing_row
 
@@ -50,6 +53,18 @@ def test_backfill_trusts_an_explicit_day_on_the_first():
 
 def test_backfill_without_a_date_stays_unset():
     assert precision_for_existing_row(None) is None
+
+
+def test_the_migration_keeps_its_own_copy_of_the_backfill_rules():
+    path = Path("alembic/versions/004_date_precision.py")
+    source = path.read_text()
+    assert "core.utils.date_precision" not in source
+    spec = importlib.util.spec_from_file_location("migration_004_date_precision", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.precision_for_existing_row("2024-01-01", {"year": 2024}) == "year"
+    assert module.precision_for_existing_row("2024-01-14") == "day"
+    assert module.precision_for_existing_row("2024-01-01", {"year": 2024, "month": 1}) == "month"
 
 
 def test_backfill_marks_a_year_without_a_month_as_year():
