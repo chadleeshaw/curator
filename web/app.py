@@ -1041,7 +1041,6 @@ app = FastAPI(
     **DOCS_URLS,
 )
 
-# Origins come from CURATOR_CORS_ORIGINS or cors_origins. A wildcard is ignored.
 _cors_origins = app_state.config_loader.get_cors_origins()
 app.add_middleware(
     CORSMiddleware,

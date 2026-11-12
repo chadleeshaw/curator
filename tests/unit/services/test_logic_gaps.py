@@ -539,6 +539,17 @@ class TestDeadIndexerUrlIsNotSentToTheClient:
         session.close()
 
 
+def test_png_generation_uses_the_module_clock():
+    """The parallel PNG helper should not import time under another name."""
+    import inspect
+
+    from services.ocr.queue import _generate_pngs_parallel
+
+    source = inspect.getsource(_generate_pngs_parallel)
+    assert "import time" not in source
+    assert "time.monotonic" in source
+
+
 class TestOcrTimeoutCountsAsAnAttempt:
     def test_a_repeated_timeout_stops(self, test_db, tmp_path, monkeypatch):
         _, session_factory = test_db

@@ -244,17 +244,14 @@ class TestCrop:
         assert "text" in data
 
 
-# ---------------------------------------------------------------------------
-# Benchmark 4 — Parallel page processing
-# Currently the 2-page scan is sequential: page 1 OCR completes, then page 2.
-# Each pytesseract call spawns its own tesseract subprocess, so they can run
-# in parallel. We pre-render both pages (pymupdf isn't thread-safe) then submit
-# both OCR calls to a ThreadPoolExecutor simultaneously.
-# ---------------------------------------------------------------------------
-
-
 class TestParallelPages:
-    """Sequential vs parallel OCR across the 2-page scan."""
+    """Sequential vs parallel OCR across the 2-page scan.
+
+    The production scan finishes page 1 before page 2. Each pytesseract call
+    spawns its own process, so the pages can run together. Both pages are
+    rendered first, because PyMuPDF is not thread-safe, and then both OCR
+    calls are submitted to a thread pool.
+    """
 
     def test_two_pages_sequential(self, benchmark, ocr_available):
         """Baseline: render + OCR 2 pages one at a time (current production)."""

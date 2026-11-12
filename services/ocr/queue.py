@@ -296,8 +296,6 @@ def _generate_pngs_parallel(png_jobs: list, timeout: float = PNG_GENERATION_TIME
     if not png_jobs:
         return {}
 
-    import time as _time
-
     running = []
     for job in png_jobs:
         result_queue = _mp_ctx.Queue()
@@ -312,7 +310,7 @@ def _generate_pngs_parallel(png_jobs: list, timeout: float = PNG_GENERATION_TIME
             ),
             daemon=True,
         )
-        started = _time.monotonic()
+        started = time.monotonic()
         proc.start()
         running.append((job["periodical_id"], job["png_path"], proc, result_queue, started))
         logger.debug(f"Started PNG generation process (pid={proc.pid}) for periodical {job['periodical_id']}")
@@ -321,7 +319,7 @@ def _generate_pngs_parallel(png_jobs: list, timeout: float = PNG_GENERATION_TIME
 
     results: Dict[int, str] = {}
     for periodical_id, png_path, proc, result_queue, started in running:
-        remaining = max(timeout - (_time.monotonic() - started), 0)
+        remaining = max(timeout - (time.monotonic() - started), 0)
         proc.join(timeout=remaining)
 
         if proc.is_alive():

@@ -889,6 +889,9 @@ class DownloadManager:
         """
         Submit discovered issue to download client.
 
+        The attempt counter moves when the client reports a failure, not when
+        it accepts the job.
+
         Args:
             issue: DiscoveredIssue record
             search_result: Search result dict
@@ -935,9 +938,7 @@ class DownloadManager:
                 attempt_count=1,
             )
 
-            # Update DiscoveredIssue with submission info. The attempt counter
-            # moves when the client reports a failure, not when it accepts the job.
-            issue.download_status = DownloadStatus.PENDING  # Submitted to and accepted by download client
+            issue.download_status = DownloadStatus.PENDING
             issue.current_submission_id = submission.id
             self._register_submission_id(issue, submission.id)
 

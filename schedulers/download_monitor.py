@@ -791,8 +791,6 @@ class DownloadMonitor:
                 else:
                     continue
 
-            # Internet Archive extracts store one path per line (older rows used
-            # commas). A comma in a SABnzbd storage path is part of the title.
             collection_paths = self._ia_collection_paths(submission)
             if collection_paths:
                 file_paths_str = collection_paths
@@ -956,7 +954,11 @@ class DownloadMonitor:
         return False
 
     def _ia_collection_paths(self, submission: DownloadSubmission) -> Optional[list]:
-        """Paths from an Internet Archive extract, or None for a single file."""
+        """Paths from an Internet Archive extract, or None for a single file.
+
+        Extracts store one path per line. Older rows used commas. A comma in a
+        SABnzbd storage path is part of the title, so only IA submissions are split.
+        """
         if not submission.file_path or not self._submission_is_internet_archive(submission):
             return None
         return split_collection_paths(submission.file_path)

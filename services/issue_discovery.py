@@ -694,6 +694,9 @@ class IssueDiscoveryService:
         Returns issues with status "wanted" or "failed" (retryable),
         ordered by priority (descending) and first_seen (ascending).
 
+        An indexer rejection stays failed until a search replaces the URL.
+        Putting that issue back on the queue would resubmit the same dead link.
+
         Args:
             session: Database session
             limit: Maximum number of issues to return
@@ -702,8 +705,6 @@ class IssueDiscoveryService:
         Returns:
             List of DiscoveredIssue objects ready for download
         """
-        # An indexer rejection stays failed until a search replaces the URL.
-        # Putting it back on the queue resubmits the same dead link.
         indexer_rejection = DiscoveredIssue.last_error.like(f"{INDEXER_REJECTION_ERROR}%")
         query = session.query(DiscoveredIssue).filter(
             or_(

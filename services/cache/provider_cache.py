@@ -175,6 +175,9 @@ class NzbCacheService:
                 submit the URL instead.
 
             429 and 5xx are transient: this returns None so the caller can retry later.
+
+            Cached bodies that are not NZB XML were stored by older builds.
+            They are deleted instead of being uploaded to the download client.
         """
         # Skip non-URL identifiers (e.g. Internet Archive slugs like "magazine-2008-13")
         if not download_url.startswith(("http://", "https://")):
@@ -189,8 +192,6 @@ class NzbCacheService:
                 if is_nzb_xml(cached.nzb_content):
                     logger.debug(f"NZB cache hit for {_url_for_log(download_url)}")
                     return cached.nzb_content
-                # Older builds stored indexer error pages. Drop them so they
-                # are not uploaded to the download client.
                 reason = _nzb_rejection_reason(cached.nzb_content)
                 session.delete(cached)
                 session.commit()
