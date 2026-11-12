@@ -117,3 +117,26 @@ def test_chown_is_skipped_when_the_tree_already_matches(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert not log.exists()
+
+
+def test_chown_runs_when_ownership_is_wrong(tmp_path):
+    data = tmp_path / "downloads"
+    data.mkdir()
+    (data / "issue.pdf").write_text("pdf")
+    log = tmp_path / "chown.log"
+    other_id = "65534" if os.getuid() != 65534 else "65533"
+    env = os.environ.copy()
+    env["PUID"] = other_id
+    env["PGID"] = other_id
+    env["DATA_DIRS"] = str(data)
+    script = f"""
+    source "{ENTRYPOINT}"
+    groupadd() {{ return 0; }}
+    useradd() {{ return 0; }}
+    chown() {{ printf '%s\\n' "$*" >> "{log}"; }}
+    prepare_runtime_user
+    """
+    result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env, check=False, capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().strip() == f"-R {other_id}:{other_id} {data}"
