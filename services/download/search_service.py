@@ -13,28 +13,13 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
+from core.constants.language import LANGUAGE_NAMES
 from core.interfaces import SearchProvider
 from core.parsers import LANGUAGE_INDICATORS, Parser, TitleMatcher
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from core.utils.result_filter import filter_result
 
 logger = logging.getLogger(__name__)
-
-# Country names sit in LANGUAGE_INDICATORS for edition tags. A search for
-# French must not keep a title that only says France.
-_COUNTRY_NAMES = frozenset(
-    {
-        "france",
-        "deutschland",
-        "españa",
-        "italia",
-        "holland",
-        "polska",
-        "japan",
-        "china",
-        "korea",
-    }
-)
 
 
 def _result_has_requested_language(parsed_language: Optional[str], title: str, language_filter: str) -> bool:
@@ -48,13 +33,8 @@ def _result_has_requested_language(parsed_language: Optional[str], title: str, l
     if parsed_language and parsed_language.lower() == language_filter.lower():
         return True
 
-    indicators = LANGUAGE_INDICATORS.get(language_filter, ())
-    return any(
-        len(word) > 2
-        and word.casefold() not in _COUNTRY_NAMES
-        and re.search(rf"\b{re.escape(word)}\b", title, re.IGNORECASE)
-        for word in indicators
-    )
+    names = LANGUAGE_NAMES.get(language_filter, ())
+    return any(len(word) > 2 and re.search(rf"\b{re.escape(word)}\b", title, re.IGNORECASE) for word in names)
 
 
 class SearchService:

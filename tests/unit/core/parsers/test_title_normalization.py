@@ -338,6 +338,7 @@ class TestTitleNormalization:
             ("137 Magazine", "137 Magazine"),
             ("17 Magazine", "17 Magazine"),
             ("17 Magazine January 2024", "17 Magazine"),
+            ("17 Magazine UK", "17 Magazine UK"),
             ("PC Gamer - UK", "PC Gamer - UK"),
             ("PC Gamer UK", "PC Gamer UK"),
             ("pcgamer uk", "PC Gamer UK"),

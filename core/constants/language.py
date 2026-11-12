@@ -69,20 +69,38 @@ LANGUAGE_TO_PADDLEOCR = {
 # Language Detection Keywords
 # ==============================================================================
 
-LANGUAGE_KEYWORDS = {
-    "German": ["German", "Deutsch", "Deutschland", "DE"],
-    "French": ["French", "Français", "Francais", "FRANCAIS", "France", "FR"],
-    "Spanish": ["Spanish", "Español", "Espanol", "ESPANOL", "España", "ES"],
-    "Italian": ["Italian", "Italiano", "Italia", "IT"],
+LANGUAGE_NAMES = {
+    "German": ["German", "Deutsch", "DE"],
+    "French": ["French", "Français", "Francais", "FRANCAIS", "FR"],
+    "Spanish": ["Spanish", "Español", "Espanol", "ESPANOL", "ES"],
+    "Italian": ["Italian", "Italiano", "IT"],
     "Portuguese": ["Portuguese", "Português", "Portugues", "PORTUGUES", "PT"],
-    "Dutch": ["Dutch", "Nederlands", "nederlands", "Holland", "NL"],
-    "Polish": ["Polish", "Polski", "Polska", "PL"],
+    "Dutch": ["Dutch", "Nederlands", "nederlands", "NL"],
+    "Polish": ["Polish", "Polski", "PL"],
     "Russian": ["Russian", "Русский", "RU"],
     "Slovak": ["Slovak", "Slovenčina", "Slovensky", "SK"],
     "Ukrainian": ["Ukrainian", "Українська", "UA"],
-    "Japanese": ["Japanese", "日本語", "Japan", "JP"],
-    "Chinese": ["Chinese", "中文", "China", "CN", "ZH"],
-    "Korean": ["Korean", "한국어", "Korea", "KR"],
+    "Japanese": ["Japanese", "日本語", "JP"],
+    "Chinese": ["Chinese", "中文", "CN", "ZH"],
+    "Korean": ["Korean", "한국어", "KR"],
+}
+"""Words that name a language. A search filter matches only these."""
+
+LANGUAGE_COUNTRY_NAMES = {
+    "German": ["Deutschland"],
+    "French": ["France"],
+    "Spanish": ["España"],
+    "Italian": ["Italia"],
+    "Dutch": ["Holland"],
+    "Polish": ["Polska"],
+    "Japanese": ["Japan"],
+    "Chinese": ["China"],
+    "Korean": ["Korea"],
+}
+"""Country names that hint at a language in an edition tag, but don't name it."""
+
+LANGUAGE_KEYWORDS = {
+    language: names + LANGUAGE_COUNTRY_NAMES.get(language, []) for language, names in LANGUAGE_NAMES.items()
 }
 """Keywords used to detect language from periodical titles"""
 

@@ -198,6 +198,8 @@ class TestCountryDetectionIntegration:
         assert detect_country("North Title Sweden Edition") == "SE"
         assert detect_country("North Title Nederland Edition") == "NL"
         assert detect_country("North Title Nederland") is None
+        assert detect_country("North Title Slovenija Edition") == "SI"
+        assert detect_country("North Title Slovenija") is None
         assert detect_country("North Title Netherlands Edition") == "NL"
         assert detect_country("North Title [SE]") == "SE"
 

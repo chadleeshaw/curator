@@ -7,7 +7,11 @@
 
 import { APIClient, APIHelper } from '../core/api.js';
 import { CSS_CLASSES } from '../core/constants.js';
-import { getSpecialEditionValue, isSpecialEdition } from './periodical-rendering.js';
+import {
+  getSpecialEditionValue,
+  isSpecialEdition,
+  selectLanguage,
+} from './periodical-rendering.js';
 import { escapeHtml } from '../readers/reader-utils.js';
 import { UIUtils } from '../core/ui-utils.js';
 
@@ -22,7 +26,6 @@ let _state = null;
 export function initMetadata(state) {
   _state = state;
 }
-
 
 // ---------------------------------------------------------------------------
 // Metadata modal – view
@@ -327,7 +330,12 @@ export function enableMetadataEdit() {
 
   // Populate form fields
   const languageField = document.getElementById('edit-language');
-  languageField.value = _state.currentPeriodicalData.language || '';
+  selectLanguage(languageField, _state.currentPeriodicalData.language || '');
+  // Only a change the user makes sends the language on save.
+  delete languageField.dataset.changed;
+  languageField.onchange = () => {
+    languageField.dataset.changed = '1';
+  };
 
   // Language on a tracked issue is the tracking language. Saving it updates
   // every issue, so a copy labeled with the wrong language can be set back
@@ -543,12 +551,13 @@ export async function saveMetadataEdit() {
   };
 
   // Only include tracking-controlled fields if issue is NOT linked to tracking.
-  // Language is the exception: on a tracked issue it updates the tracking
-  // record, and every issue of that magazine, when the user changes it.
-  const selectedLanguage = document.getElementById('edit-language').value;
+  // Language is sent only when the user changed the dropdown: on a tracked
+  // issue it updates the tracking record and every issue of that magazine,
+  // and an empty value clears it.
+  const languageField = document.getElementById('edit-language');
   const currentLanguage = _state.currentPeriodicalData.language || '';
-  if (!hasTracking || selectedLanguage !== currentLanguage) {
-    updates.language = selectedLanguage;
+  if (languageField.dataset.changed && languageField.value !== currentLanguage) {
+    updates.language = languageField.value;
   }
   if (!hasTracking) {
     updates.country = document.getElementById('edit-country').value || null;

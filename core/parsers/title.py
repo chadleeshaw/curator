@@ -125,8 +125,8 @@ def _is_plus_title(part: str) -> bool:
 
 
 def _is_numbered_magazine(title: str) -> bool:
-    """17 Magazine is the name. 12 North Title is an issue number plus a title."""
-    return bool(re.fullmatch(r"\d{1,3}\s+mag(?:azine)?\.?", (title or "").strip(), flags=re.IGNORECASE))
+    """17 Magazine (and 17 Magazine UK) is the name. 12 North Title is an issue number plus a title."""
+    return bool(re.match(r"\d{1,3}\s+mag(?:azine)?\b", (title or "").strip(), flags=re.IGNORECASE))
 
 
 def _is_issue_token(part: str) -> bool:

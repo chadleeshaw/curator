@@ -6,6 +6,8 @@
  * and file viewer (openPDF).
  */
 
+/* global Option */
+
 import { APIClient, APIHelper } from '../core/api.js';
 import { UIUtils } from '../core/ui-utils.js';
 
@@ -21,27 +23,34 @@ export async function loadLanguageDropdown() {
     if (data.success && data.languages) {
       const dropdown = document.getElementById('edit-language');
       if (!dropdown) return;
-      const currentValue = dropdown.value;
+      const currentValue = dropdown.dataset.saved ?? dropdown.value;
       dropdown.innerHTML = '';
-      const anyOption = document.createElement('option');
-      anyOption.value = '';
-      anyOption.textContent = 'Any';
-      dropdown.appendChild(anyOption);
-      data.languages.forEach((lang) => {
-        const option = document.createElement('option');
-        option.value = lang;
-        option.textContent = lang;
-        dropdown.appendChild(option);
-      });
-      // Use `!== undefined` rather than a truthiness check so that an empty string
-      // (selecting "Any") is preserved — `if (currentValue)` would skip restoring it.
-      if (currentValue !== undefined) {
-        dropdown.value = currentValue;
-      }
+      // Empty value clears the language, so label it as that, not "Any".
+      dropdown.add(new Option('None (clear language)', ''));
+      data.languages.forEach((lang) => dropdown.add(new Option(lang, lang)));
+      // The edit form may have set the saved language before these options
+      // existed; put it back now that they do.
+      selectLanguage(dropdown, currentValue);
     }
   } catch (error) {
     console.error('[Periodical] Failed to load languages:', error);
   }
+}
+
+/**
+ * Select a language in the edit-language dropdown and remember it as the
+ * saved value, adding an option when the list doesn't have it (or hasn't
+ * loaded yet) so the dropdown never silently falls back to blank.
+ *
+ * @param {HTMLSelectElement} dropdown
+ * @param {string} value
+ */
+export function selectLanguage(dropdown, value) {
+  dropdown.dataset.saved = value;
+  if (value && ![...dropdown.options].some((o) => o.value === value)) {
+    dropdown.add(new Option(value, value));
+  }
+  dropdown.value = value;
 }
 
 /**

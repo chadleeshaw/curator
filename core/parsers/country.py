@@ -216,6 +216,9 @@ ISO_COUNTRIES: Dict[str, str] = {
     "XK": "Kosovo",
 }
 
+# A country's own name, where it differs from the English one above.
+_NATIVE_COUNTRY_NAMES: Dict[str, str] = {"Nederland": "NL", "Slovenija": "SI"}
+
 
 def find_country(code_or_name: str) -> Optional[str]:
     """
@@ -290,9 +293,10 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     if re.search(r"\bSouth[\s\.]Africa\s+edition\b", text, re.IGNORECASE):
         return "ZA"
 
-    # Nederland is the Dutch name. It counts only as an edition phrase.
-    if re.search(r"\bNederland\s+edition\b", text, re.IGNORECASE):
-        return "NL"
+    # A country's own name, such as Nederland, also counts only as an edition phrase.
+    for name, code in _NATIVE_COUNTRY_NAMES.items():
+        if re.search(rf"\b{name}\s+edition\b", text, re.IGNORECASE):
+            return code
 
     # Common English words that look like country codes but should be ignored
     common_words = {
