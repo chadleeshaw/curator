@@ -116,7 +116,12 @@ async def _render_in_process(pool_name: str, func: Callable[..., bytes], *args: 
     try:
         return await asyncio.get_running_loop().run_in_executor(pool, func, *args)
     except BrokenProcessPool:
-        _render_pools.pop(pool_name, None)
+        broken = _render_pools.pop(pool_name, None)
+        if broken is not None:
+            try:
+                broken.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                logger.warning("Could not shut down the broken %s PDF render pool", pool_name, exc_info=True)
         raise
 
 

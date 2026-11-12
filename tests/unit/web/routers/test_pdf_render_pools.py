@@ -78,7 +78,7 @@ async def test_a_broken_process_pool_is_replaced(monkeypatch):
             created.append(self)
 
         def shutdown(self, wait=True, cancel_futures=False):
-            return None
+            self.shutdown_args = (wait, cancel_futures)
 
     monkeypatch.setattr(files, "ProcessPoolExecutor", _Pool)
     loop = asyncio.get_running_loop()
@@ -101,5 +101,6 @@ async def test_a_broken_process_pool_is_replaced(monkeypatch):
     assert "page" not in files._render_pools
     assert await files._render_in_process("page", lambda *_args: b"", "file.pdf", 0) == b"jpeg"
     assert len(created) == 2
+    assert created[0].shutdown_args == (False, True)
     assert created[0].max_workers == 2
     assert "page" in files._render_pools
