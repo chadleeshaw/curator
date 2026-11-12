@@ -370,6 +370,45 @@ class TestDatePrecisionNotTheClock:
         assert wanted.periodical_id == owned.id
         session.close()
 
+    def test_a_year_only_issue_does_not_match_the_january_issue(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "month", "year", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_year_only_issue_does_not_match_a_dated_day(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "day", "year", 14, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_two_year_only_issues_in_the_same_year_are_duplicates(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, "year", "year", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
     def test_two_month_only_issues_with_different_editions_are_not_duplicates(self, test_db, issue_discovery_service):
         _, session_factory = test_db
         session = session_factory()

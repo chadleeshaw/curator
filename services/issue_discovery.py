@@ -25,7 +25,7 @@ from core.constants.app import (
     MAX_ERROR_LENGTH,
     NEW_ISSUE_THRESHOLD_DAYS,
 )
-from core.constants.date import DATE_PRECISION_DAY
+from core.constants.date import DATE_PRECISION_DAY, DATE_PRECISION_YEAR
 from core.constants.country import (
     FULL_NAME_COUNTRY_CODES,
     ISO_COUNTRIES,
@@ -136,6 +136,17 @@ def _days_conflict(issue, magazine) -> bool:
     return True
 
 
+def _year_precision_conflict(issue, magazine) -> bool:
+    """A year-only date is not the month or day stored on the 1st of that year."""
+    wanted = _date_precision(issue)
+    owned = _date_precision(magazine)
+    if wanted != DATE_PRECISION_YEAR and owned != DATE_PRECISION_YEAR:
+        return False
+    if not wanted or not owned:
+        return False
+    return wanted != owned
+
+
 def _edition_keyword(title: Optional[str]) -> Optional[str]:
     """Longest special-edition phrase in a title, if one is present."""
     if not title:
@@ -224,7 +235,7 @@ def _same_library_issue(issue: DiscoveredIssue, magazine: Periodical) -> bool:
     if wanted.year != owned.year or wanted.month != owned.month:
         return False
 
-    if _days_conflict(issue, magazine):
+    if _year_precision_conflict(issue, magazine) or _days_conflict(issue, magazine):
         return False
 
     wanted_number = _issue_number_of(issue)

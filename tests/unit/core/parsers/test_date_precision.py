@@ -50,3 +50,12 @@ def test_backfill_trusts_an_explicit_day_on_the_first():
 
 def test_backfill_without_a_date_stays_unset():
     assert precision_for_existing_row(None) is None
+
+
+def test_backfill_marks_a_year_without_a_month_as_year():
+    assert precision_for_existing_row("2024-01-01 00:00:00", {"year": 2024}) == "year"
+    assert precision_for_existing_row("2024-01-01", {"year": {"value": 2024}}) == "year"
+
+
+def test_backfill_keeps_january_when_a_month_was_stored():
+    assert precision_for_existing_row("2024-01-01", {"year": 2024, "month": "January"}) == "month"
