@@ -339,3 +339,37 @@ def test_manual_metadata_edit_sets_month_precision(session):
         assert saved.derived_metadata["issue_number"]["value"] == "9"
     finally:
         check.close()
+
+
+def test_a_year_only_edit_is_year_precision(session):
+    magazine = Periodical(
+        user_id=1,
+        title="City Paper",
+        issue_date=datetime(2020, 6, 14),
+        file_path="/library/city-year.pdf",
+        date_precision="day",
+    )
+    session.add(magazine)
+    session.commit()
+    magazine_id = magazine.id
+    factory = sessionmaker(bind=session.get_bind())
+    from web.routers.periodicals import _shared
+
+    _shared.set_dependencies(factory, library_base_dir="/tmp/library")
+    app = FastAPI()
+    app.dependency_overrides[get_verify_token] = lambda: "tester"
+    app.include_router(metadata_router.router)
+    client = TestClient(app)
+
+    response = client.put(f"/api/periodicals/{magazine_id}", json={"year": 2024})
+
+    check = factory()
+    try:
+        saved = check.query(Periodical).filter_by(id=magazine_id).one()
+        assert response.status_code == 200
+        assert saved.date_precision == "year"
+        assert saved.issue_date.year == 2024
+        assert saved.issue_date.month == 1
+        assert saved.issue_date.day == 1
+    finally:
+        check.close()
