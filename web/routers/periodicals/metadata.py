@@ -25,10 +25,11 @@ logger = _shared.logger
 def _recognized_month(month_str: Any) -> int:
     """Month number when the text names a real month, otherwise 0.
 
-    ``parse_month_string`` turns a blank or unknown value into January. That
-    default is not evidence the user supplied a month.
+    Names such as March count, and so do ``3`` and ``03``. ``0``, ``13``, and
+    other junk do not. ``parse_month_string`` would turn those into January,
+    which is not evidence the user supplied a month.
     """
-    if month_str is None:
+    if month_str is None or isinstance(month_str, bool):
         return 0
     text = str(month_str).strip()
     if not text:
@@ -38,6 +39,11 @@ def _recognized_month(month_str: Any) -> int:
         if separator in first:
             first = first.split(separator)[0].strip()
             break
+    if first.isdigit():
+        number = int(first)
+        if 1 <= number <= 12:
+            return number
+        return 0
     return MONTH_TO_NUMBER.get(first.lower(), 0)
 
 
