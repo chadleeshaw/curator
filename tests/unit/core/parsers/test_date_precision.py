@@ -1,9 +1,11 @@
 """Date precision comes from what the parser named, not from midnight on the 1st."""
 
 import importlib.util
+from datetime import UTC, datetime
 from pathlib import Path
 
 from core.parsers.metadata import FilenameParser
+from core.parsers.parser import Parser
 from core.utils.date_precision import precision_for_existing_row
 
 
@@ -19,6 +21,16 @@ def test_a_spaced_month_name_filename_is_month_precision():
     parsed = FilenameParser().extract_from_filename(Path("Wired January 2024.pdf"))
     assert parsed["date_precision"] == "month"
     assert parsed["month"] == 1
+
+
+def test_a_feed_timestamp_without_a_title_date_is_month_precision():
+    parsed = Parser().parse_search_result(
+        title="City Paper",
+        url="http://example.com/city.nzb",
+        provider="newsnab",
+        publication_date=datetime(2024, 1, 14, tzinfo=UTC),
+    )
+    assert parsed.raw_metadata["date_precision"] == "month"
 
 
 def test_a_month_name_is_month_precision():
