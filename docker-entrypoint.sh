@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # The image starts as root so it can fix ownership of mounted volumes, then
-# drops to PUID:PGID. UID or GID 0 is refused.
+# drops to PUID:PGID. UID or GID 0 is refused. If the container is started as
+# a non-root user instead, that user is kept and PUID/PGID are ignored.
 : "${PUID:=1000}"
 : "${PGID:=1000}"
 
@@ -57,6 +58,13 @@ drop_privileges() {
 }
 
 main() {
+    # Started with an explicit non-root user (docker --user, compose/Swarm
+    # `user:`): the runtime user is already set, and groupadd/useradd/chown
+    # would fail. Mounted volumes must already be writable by that user.
+    if [ "$(id -u)" != "0" ]; then
+        ensure_config
+        exec "$@"
+    fi
     refuse_root_ids
     ensure_config
     prepare_runtime_user

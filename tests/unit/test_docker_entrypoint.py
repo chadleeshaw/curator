@@ -33,6 +33,15 @@ def _run(tmp_path, *args, config_text="search_providers: []\n"):
     return result, dest
 
 
+def _fake_id(tmp_path, uid):
+    """Put an `id` on PATH that reports `uid`, so tests don't depend on who runs them."""
+    shim = tmp_path / "bin"
+    shim.mkdir(exist_ok=True)
+    (shim / "id").write_text(f"#!/bin/sh\necho {uid}\n")
+    (shim / "id").chmod(0o755)
+    return shim
+
+
 def test_first_run_copies_the_template(tmp_path):
     result, dest = _run(tmp_path, "true")
 
@@ -58,6 +67,7 @@ def test_entrypoint_does_not_copy_the_missing_sample():
 
 def test_root_ids_are_refused(tmp_path):
     env, dest = _env(tmp_path)
+    env["PATH"] = f"{_fake_id(tmp_path, 0)}:{env['PATH']}"
     env["PUID"] = "0"
     result = subprocess.run(
         ["bash", str(ENTRYPOINT), "true"],
@@ -140,3 +150,28 @@ def test_chown_runs_when_ownership_is_wrong(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert log.read_text().strip() == f"-R {other_id}:{other_id} {data}"
+
+
+def test_a_non_root_start_skips_user_setup_and_runs_the_command(tmp_path):
+    env, dest = _env(tmp_path)
+    env["PUID"] = "12345"  # ignored when already non-root
+    shim = _fake_id(tmp_path, 1009)
+    # Fail loudly if user setup is attempted.
+    for name in ("groupadd", "useradd", "chown", "setpriv"):
+        (shim / name).write_text(f"#!/bin/sh\necho {name} called >&2\nexit 99\n")
+        (shim / name).chmod(0o755)
+    env["PATH"] = f"{shim}:{env['PATH']}"
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT), "echo", "ran"],
+        cwd=ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().endswith("ran")
+    assert "called" not in result.stderr
+    assert dest.exists()
