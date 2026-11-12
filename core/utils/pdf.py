@@ -12,6 +12,7 @@ from pdf2image import convert_from_path
 from PIL import Image
 
 from core.constants.files import (
+    PDF_MAX_RENDER_SIDE,
     PIL_MAX_IMAGE_PIXELS,
     PDF_COVER_DPI_LOW,
     PDF_COVER_QUALITY,
@@ -21,6 +22,31 @@ logger = logging.getLogger(__name__)
 
 # Increase Pillow's decompression bomb limit for high-res covers
 Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
+
+
+def capped_dpi(width_pts: float, height_pts: float, dpi: int) -> int:
+    """Lower dpi so the page's longest side renders at no more than PDF_MAX_RENDER_SIDE pixels."""
+    longest_inches = max(width_pts, height_pts) / 72
+    if longest_inches <= 0:
+        return dpi
+    return max(1, min(dpi, int(PDF_MAX_RENDER_SIDE / longest_inches)))
+
+
+def page_render_dpi(pdf_path, page_number: int, dpi: int) -> int:
+    """The DPI to render one page (1-based) at, capped for oversized pages."""
+    try:
+        with pymupdf.open(str(pdf_path)) as doc:
+            rect = doc[page_number - 1].rect
+    except Exception as e:
+        logger.debug(f"Could not read page size of {pdf_path}: {e}")
+        return dpi
+    render_dpi = capped_dpi(rect.width, rect.height, dpi)
+    if render_dpi < dpi:
+        logger.info(
+            f"Rendering page {page_number} of {pdf_path} at {render_dpi} DPI instead of {dpi}: "
+            f"the page is {rect.width / 72:.0f} x {rect.height / 72:.0f} inches"
+        )
+    return render_dpi
 
 
 def is_landscape_page(pdf_path: Path, page_number: int = 1) -> Tuple[bool, float]:
@@ -126,7 +152,12 @@ def extract_cover_from_pdf(
         # Check if page is landscape before extraction
         is_landscape, aspect_ratio = is_landscape_page(pdf_path, page_number)
 
-        images = convert_from_path(str(pdf_path), first_page=page_number, last_page=page_number, dpi=dpi)
+        images = convert_from_path(
+            str(pdf_path),
+            first_page=page_number,
+            last_page=page_number,
+            dpi=page_render_dpi(pdf_path, page_number, dpi),
+        )
         if not images:
             logger.warning(f"Could not extract images from PDF: {pdf_path}")
             return None

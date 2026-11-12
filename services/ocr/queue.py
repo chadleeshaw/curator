@@ -85,11 +85,13 @@ def _generate_png_in_process(pdf_path: str, png_path: str, dpi: int, max_dimensi
         from pdf2image import convert_from_path
         from PIL import Image
 
+        from core.utils.pdf import page_render_dpi
+
         images = convert_from_path(
             pdf_path,
             first_page=1,
             last_page=1,
-            dpi=dpi,
+            dpi=page_render_dpi(pdf_path, 1, dpi),
             fmt="png",
         )
 

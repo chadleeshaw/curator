@@ -527,3 +527,39 @@ class TestLandscapeDetection:
 
         # Verify image was cropped (right half: from x=900 to x=1800)
         mock_image.crop.assert_called_once_with((900, 0, 1800, 1000))
+
+
+def _pdf_with_page(tmp_path, width_in, height_in):
+    import pymupdf
+
+    path = tmp_path / "page.pdf"
+    doc = pymupdf.open()
+    doc.new_page(width=width_in * 72, height=height_in * 72)
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_a_normal_page_keeps_its_dpi(tmp_path):
+    from core.utils.pdf import page_render_dpi
+
+    assert page_render_dpi(_pdf_with_page(tmp_path, 8.5, 11), 1, 200) == 200
+
+
+def test_a_poster_sized_page_renders_at_a_lower_dpi(tmp_path):
+    """A 68 x 92 inch page at 200 DPI would be about 250 megapixels."""
+    from core.constants.files import PDF_MAX_RENDER_SIDE
+    from core.utils.pdf import page_render_dpi
+
+    dpi = page_render_dpi(_pdf_with_page(tmp_path, 68, 92), 1, 200)
+
+    assert dpi < 200
+    assert 92 * dpi <= PDF_MAX_RENDER_SIDE
+
+
+def test_an_unreadable_pdf_keeps_the_requested_dpi(tmp_path):
+    from core.utils.pdf import page_render_dpi
+
+    path = tmp_path / "broken.pdf"
+    path.write_text("not a pdf")
+    assert page_render_dpi(path, 1, 200) == 200

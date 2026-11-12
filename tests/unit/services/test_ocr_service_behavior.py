@@ -171,7 +171,14 @@ class _FakePixmap:
         self.samples = b"\xff" * (self.width * self.height * 3)
 
 
+class _FakeRect:
+    width = 612
+    height = 792
+
+
 class _FakePage:
+    rect = _FakeRect()
+
     def get_pixmap(self, dpi=300):
         return _FakePixmap()
 

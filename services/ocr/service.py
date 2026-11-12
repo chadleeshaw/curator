@@ -31,6 +31,7 @@ from core.constants.language import (
     LANGUAGE_TO_PADDLEOCR,
 )  # Will rename to LANGUAGE_TO_TESSERACT
 from core.constants.files import PIL_MAX_IMAGE_PIXELS
+from core.utils.pdf import capped_dpi
 from core.constants.ocr import (
     OCR_DISABLE_ENV_VALUES,
     OCR_IMAGE_MAX_DIMENSION,
@@ -469,7 +470,7 @@ class OCRService:
                 page = doc[page_num]
 
                 # Render page to image at specified DPI
-                pix = page.get_pixmap(dpi=dpi)
+                pix = page.get_pixmap(dpi=capped_dpi(page.rect.width, page.rect.height, dpi))
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
                 # Downscale to OCR_IMAGE_MAX_DIMENSION before Tesseract — large images

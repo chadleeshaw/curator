@@ -22,6 +22,11 @@ PDF_COVER_DPI_LOW = 60
 PDF_COVER_DPI_HIGH = 200
 """High DPI setting for quality cover images"""
 
+PDF_MAX_RENDER_SIDE = 6000
+"""Longest side in pixels a PDF page is rendered at. A page with a broken,
+poster-sized media box renders at a lower DPI instead of hundreds of
+megapixels. A 17-inch page at 200 DPI is 3400 pixels, well under this."""
+
 PDF_COVER_QUALITY = 50
 """JPEG quality for low resolution covers (1-100)"""
 
