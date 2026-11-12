@@ -21,6 +21,11 @@ refuse_root_ids() {
     fi
 }
 
+ownership_is_wrong() {
+    # Skip the recursive chown when the tree already belongs to the runtime user.
+    find "$1" \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit | grep -q .
+}
+
 ensure_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
         echo "No config found, copying template configuration..."
@@ -40,7 +45,7 @@ prepare_runtime_user() {
             --no-create-home --shell /usr/sbin/nologin "curatoru${PUID}"
     fi
     for dir in $DATA_DIRS; do
-        if [ -d "$dir" ]; then
+        if [ -d "$dir" ] && ownership_is_wrong "$dir"; then
             chown -R "$PUID:$PGID" "$dir"
         fi
     done

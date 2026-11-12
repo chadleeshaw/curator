@@ -90,7 +90,30 @@ def test_privileges_drop_with_setpriv_and_chown_only_data_dirs():
     text = ENTRYPOINT.read_text()
     assert "setpriv --reuid" in text
     assert 'chown -R "$PUID:$PGID" "$dir"' in text
+    assert "ownership_is_wrong" in text
     assert "/app/local/config" in text
     assert "/app/local/data" in text
     assert "chown -R /app\n" not in text
     assert "chown -R /app " not in text
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert "--start-period=60s" in dockerfile
+
+
+def test_chown_is_skipped_when_the_tree_already_matches(tmp_path):
+    data = tmp_path / "downloads"
+    data.mkdir()
+    (data / "issue.pdf").write_text("pdf")
+    log = tmp_path / "chown.log"
+    env = os.environ.copy()
+    env["PUID"] = str(os.getuid())
+    env["PGID"] = str(os.getgid())
+    env["DATA_DIRS"] = str(data)
+    script = f'''
+    source "{ENTRYPOINT}"
+    chown() {{ printf '%s\\n' "$*" >> "{log}"; }}
+    prepare_runtime_user
+    '''
+    result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env, check=False, capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert not log.exists()

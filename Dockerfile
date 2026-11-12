@@ -90,7 +90,7 @@ VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/lo
 EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python docker_healthcheck.py || exit 1
 
 # Entrypoint
