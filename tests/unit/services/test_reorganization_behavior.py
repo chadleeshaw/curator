@@ -571,19 +571,17 @@ class TestSidecarReorganization:
         assert unrelated.read_text() == "unrelated"
         assert invalid.read_text() == "invalid"
 
-    def test_dash_month_name_without_integer_month_is_stored_as_january(self, organizer, library, session):
+    def test_dash_month_name_keeps_december(self, organizer, library, session):
         category = _magazines(library)
         source = _write(category / "Inbox" / "Hello - December2024.pdf", "december")
         _write_sidecar(source, "Hello")
 
         result = organizer.reorganize_from_database(session, "Magazines", auto_fix_tracking=False)
 
-        january = library / "_Magazines" / "Hello" / "2024" / "Hello - January2024.pdf"
         december = library / "_Magazines" / "Hello" / "2024" / "Hello - December2024.pdf"
         assert result["files_reorganized"] == 1
-        assert result["changes"][0]["new_path"] == str(january)
-        assert january.read_text() == "december"
-        assert not december.exists()
+        assert result["changes"][0]["new_path"] == str(december)
+        assert december.read_text() == "december"
         assert not source.exists()
 
     def test_country_name_already_in_the_title_is_not_appended(self, organizer, library, session):

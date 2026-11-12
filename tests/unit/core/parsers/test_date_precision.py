@@ -10,6 +10,14 @@ def test_a_full_iso_date_on_the_first_is_day_precision():
     assert parsed["day"] == 1
 
 
+def test_a_spaced_month_name_filename_is_month_precision():
+    from pathlib import Path
+
+    parsed = FilenameParser().extract_from_filename(Path("Wired January 2024.pdf"))
+    assert parsed["date_precision"] == "month"
+    assert parsed["month"] == 1
+
+
 def test_a_month_name_is_month_precision():
     parsed = FilenameParser().extract_from_nzb_title("City Paper January 2024")
     assert parsed["date_precision"] == "month"

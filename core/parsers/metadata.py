@@ -928,6 +928,7 @@ class FilenameParser:
         metadata["title"] = cleaned
         metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
+        metadata["month"] = month_num
         metadata["month_name"] = normalized_month
         metadata["pattern"] = "dash_month_year"
         return metadata
@@ -953,6 +954,7 @@ class FilenameParser:
         metadata["title"] = clean_title(title)
         metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
+        metadata["month"] = month_num
         metadata["month_name"] = normalized_month
         metadata["pattern"] = "dot_separated"
         logger.info(f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename")
@@ -999,6 +1001,7 @@ class FilenameParser:
         metadata["title"] = cleaned
         metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
+        metadata["month"] = month_num
         metadata["month_name"] = normalized_month
         metadata["pattern"] = "space_month_year"
         return metadata
@@ -1022,6 +1025,7 @@ class FilenameParser:
             metadata["title"] = clean_title(title)
             metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
             metadata["year"] = year
+            metadata["month"] = month_num
             metadata["month_name"] = NUMBER_TO_MONTH.get(month_num, "")
             metadata["pattern"] = "iso_date"
             return metadata
