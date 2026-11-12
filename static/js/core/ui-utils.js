@@ -234,6 +234,23 @@ export class UIUtils {
   }
 
   /**
+   * Show a spinner and a label in a container until its content arrives.
+   * The caller replaces the container's content when loading finishes.
+   *
+   * @param {HTMLElement|null} container
+   * @param {string} label - Fixed text such as "Loading library…" (not user data)
+   * @returns {void}
+   */
+  static showLoading(container, label) {
+    if (!container) return;
+    container.innerHTML = `
+      <div class="loading-state" role="status">
+        <div class="loading-spinner"></div>
+        <p>${label}</p>
+      </div>`;
+  }
+
+  /**
    * Display a status message as a toast notification anchored to the
    * breadcrumb bar (right side) or top-right of an open modal.
    *

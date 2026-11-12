@@ -69,6 +69,12 @@ export class OCRQueueManager {
    * Load OCR queue and stats
    */
   async loadQueue() {
+    // Only the first load shows a spinner; refreshes keep what is on screen.
+    const statsDiv = document.getElementById('ocr-queue-stats');
+    if (statsDiv && !statsDiv.children.length) {
+      UIUtils.showLoading(statsDiv, 'Loading OCR queue…');
+    }
+
     try {
       const [queueData, statsData] = await APIHelper.executeWithErrorHandling(
         async () => {
@@ -90,7 +96,10 @@ export class OCRQueueManager {
       this.displayQueue(queueData, statsData);
       this._refreshOpenModal(queueData.jobs ?? []);
     } catch (error) {
-      // Already logged and displayed by APIHelper
+      // Already logged and displayed by APIHelper. Replace the spinner.
+      if (statsDiv?.querySelector('.loading-state')) {
+        statsDiv.innerHTML = '<p class="loading-state">Could not load the OCR queue.</p>';
+      }
     }
   }
 

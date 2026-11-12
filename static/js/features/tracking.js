@@ -1610,11 +1610,7 @@ export class TrackingManager {
     try {
       // Show loading spinner
       const issuesContent = document.getElementById('search-issues-content');
-      issuesContent.innerHTML = `
-        <div style="text-align: center; padding: 60px;">
-          <div class="loading-spinner"></div>
-          <p style="margin-top: 20px; color: var(--text-secondary);">Searching for issues...</p>
-        </div>`;
+      UIUtils.showLoading(issuesContent, 'Searching for issues…');
       document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
 
       // Store tracking_id for later use in downloadIssue

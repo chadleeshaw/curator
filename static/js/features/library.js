@@ -299,27 +299,44 @@ export class LibraryManager {
    * await library.loadPeriodicals();
    */
   async loadPeriodicals() {
-    const data = await APIHelper.executeWithErrorHandling(async () => {
-      const { field, order } = this.sortManager.getSortParams();
-      const response = await APIClient.authenticatedFetch(
-        `/api/periodicals?sort_by=${field}&sort_order=${order}&limit=${API_LIMITS.PERIODICAL_LIST}`
-      );
-      return await response.json();
-    }, 'Library');
+    // First load shows a spinner; a reload dims the grid that is already there
+    const grid = document.getElementById('periodicals-grid');
+    if (this.periodicalsLoaded) {
+      grid?.classList.add('is-refreshing');
+    } else {
+      UIUtils.showLoading(grid, 'Loading library…');
+    }
 
-    if (data) {
-      // Store all periodicals unfiltered
-      this.allPeriodicals = data.periodicals || [];
-      this.periodicalsLoaded = true;
+    try {
+      // Stacks and languages don't depend on the periodical list, so all three
+      // load at once. The language dropdown can reset the language filter, so
+      // it finishes before the grid renders.
+      const [data] = await Promise.all([
+        APIHelper.executeWithErrorHandling(async () => {
+          const { field, order } = this.sortManager.getSortParams();
+          const response = await APIClient.authenticatedFetch(
+            `/api/periodicals?sort_by=${field}&sort_order=${order}&limit=${API_LIMITS.PERIODICAL_LIST}`
+          );
+          return await response.json();
+        }, 'Library'),
+        this.loadStacks(),
+        this.populateLanguageDropdown(),
+      ]);
 
-      // Load stacks data
-      await this.loadStacks();
-
-      // Load unique languages for language filter (independent API call)
-      await this.populateLanguageDropdown();
-
-      // Apply filters and render
-      this.applyFiltersAndRender();
+      if (data) {
+        // Store all periodicals unfiltered
+        this.allPeriodicals = data.periodicals || [];
+        this.periodicalsLoaded = true;
+        this.applyFiltersAndRender();
+      }
+    } catch (error) {
+      // Already logged by APIHelper. Replace the spinner so it doesn't spin forever.
+      if (!this.periodicalsLoaded && grid) {
+        grid.innerHTML =
+          '<p class="loading-state">Could not load the library. Try again in a moment.</p>';
+      }
+    } finally {
+      grid?.classList.remove('is-refreshing');
     }
   }
 

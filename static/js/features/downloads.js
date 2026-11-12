@@ -332,6 +332,13 @@ export class DownloadsManager {
    * await downloads.loadDownloadQueue();
    */
   async loadDownloadQueue() {
+    // The queue tab is blank until the first response; later refreshes keep
+    // what is on screen, so only the first load shows a spinner.
+    const statsDiv = document.getElementById('queue-stats');
+    if (statsDiv && !statsDiv.children.length) {
+      UIUtils.showLoading(statsDiv, 'Loading download queue…');
+    }
+
     try {
       const url = '/api/downloads/queue/all';
       console.log('[Queue] Fetching from:', url);
@@ -356,6 +363,9 @@ export class DownloadsManager {
       this._refreshOpenModal(data.queue ?? []);
     } catch (error) {
       console.error('[Queue] Failed to load queue:', error);
+      if (statsDiv?.querySelector('.loading-state')) {
+        statsDiv.innerHTML = '<p class="loading-state">Could not load the download queue.</p>';
+      }
     }
   }
 

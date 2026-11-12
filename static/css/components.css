@@ -1217,6 +1217,27 @@
   margin: 20px auto;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation-duration: 3s;
+  }
+}
+
+/* First load of a section: spinner and label in place of the content */
+.loading-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+/* Content already on screen while a newer copy loads */
+.is-refreshing {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
 /* ==========================================================================
    Settings Navigation
    ========================================================================== */
