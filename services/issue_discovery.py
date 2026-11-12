@@ -30,6 +30,7 @@ from core.constants.country import (
     ISO_COUNTRIES,
     THREE_LETTER_COUNTRY_CODES,
 )
+from core.constants.title import SPECIAL_EDITION_KEYWORDS
 from core.constants.validation import ANTI_PERIODICAL_PATTERNS, PERIODICAL_PATTERNS
 from core.utils.result_filter import title_contains_name, title_has_blacklisted_extension, title_matches_query
 from models.database import (
@@ -58,6 +59,162 @@ def _as_date(value):
     if isinstance(value, datetime):
         return value.date()
     return value
+
+
+def _text(value) -> Optional[str]:
+    """Stripped text, or None when the value is missing or blank."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _nested_value(container, key):
+    """Read a plain field or a derived ``{value, source, confidence}`` entry."""
+    if not isinstance(container, dict):
+        return None
+    raw = container.get(key)
+    if isinstance(raw, dict) and "value" in raw:
+        return raw.get("value")
+    return raw
+
+
+def _first_present(sources, key):
+    """First non-empty value for key across metadata dicts."""
+    for source in sources:
+        value = _nested_value(source, key)
+        if value not in (None, "", []):
+            return value
+    return None
+
+
+def _known_day(date_value, *sources) -> Optional[int]:
+    """Day of month when the source actually named one.
+
+    A date stored as the 1st at midnight is the month-only default used for
+    "January 2024". A later day, an explicit day field, or a timestamp means
+    the day identifies the issue.
+    """
+    explicit = _first_present(sources, "day")
+    if explicit not in (None, ""):
+        try:
+            day = int(explicit)
+        except (TypeError, ValueError):
+            day = None
+        else:
+            if 1 <= day <= 31:
+                return day
+    if not date_value:
+        return None
+    if isinstance(date_value, datetime) and (
+        date_value.hour or date_value.minute or date_value.second or date_value.microsecond
+    ):
+        return _as_date(date_value).day
+    day = _as_date(date_value).day
+    return day if day != 1 else None
+
+
+def _edition_keyword(title: Optional[str]) -> Optional[str]:
+    """Longest special-edition phrase in a title, if one is present."""
+    if not title:
+        return None
+    lowered = title.lower()
+    padded = f" {lowered} "
+    found = []
+    for keyword in SPECIAL_EDITION_KEYWORDS:
+        if keyword.startswith(" ") or keyword.endswith(" "):
+            if keyword in padded:
+                found.append(keyword.strip())
+        elif keyword in lowered:
+            found.append(keyword)
+    if not found:
+        return None
+    return max(found, key=len)
+
+
+def _edition_key(is_special, name, title) -> Optional[str]:
+    """Edition identity: a name, the title's keyword, or regular/special."""
+    named = _text(name)
+    if named:
+        return named.lower()
+    keyword = _edition_keyword(title)
+    if keyword:
+        return keyword
+    if is_special is True:
+        return "special"
+    if is_special is False:
+        return "regular"
+    return None
+
+
+def _metadata_sources(record) -> list:
+    """Metadata dicts that may carry day, issue number, or edition."""
+    sources = [getattr(record, "derived_metadata", None), getattr(record, "extra_metadata", None)]
+    parsed = getattr(record, "parsed_metadata", None)
+    if isinstance(parsed, dict):
+        sources.extend(parsed.get(name) for name in ("file_scan", "text_scan", "ocr_scan"))
+    return sources
+
+
+def _edition_of(record) -> Optional[str]:
+    """Edition key for a discovered issue or a library copy."""
+    sources = _metadata_sources(record)
+    flag = _first_present(sources, "is_special_edition")
+    if flag is None:
+        flag = _first_present(sources, "special_edition")
+    if isinstance(flag, str):
+        flag = flag.strip().lower() in {"1", "true", "yes"}
+    name = _first_present(sources, "special_edition_name")
+    return _edition_key(flag if isinstance(flag, bool) else None, name, getattr(record, "title", None))
+
+
+def _issue_number_of(record) -> Optional[str]:
+    """Issue number from the column or from stored metadata."""
+    column = _text(getattr(record, "issue_number", None))
+    if column:
+        return column
+    return _text(_first_present(_metadata_sources(record), "issue_number")) or _text(
+        _first_present(_metadata_sources(record), "issue")
+    )
+
+
+def _editions_conflict(left: Optional[str], right: Optional[str]) -> bool:
+    """True when both sides name an edition and they are not the same one.
+
+    A special edition is not the unlabeled or regular issue in the same month.
+    A regular issue can still match a library copy that never recorded an edition.
+    """
+
+    def _special(key):
+        return bool(key) and key != "regular"
+
+    if _special(left) and _special(right):
+        return left != right and left not in right and right not in left
+    return _special(left) or _special(right)
+
+
+def _same_library_issue(issue: DiscoveredIssue, magazine: Periodical) -> bool:
+    """True when the library copy is this issue, not merely the same month."""
+    if not issue.issue_date or not magazine.issue_date:
+        return False
+    wanted = _as_date(issue.issue_date)
+    owned = _as_date(magazine.issue_date)
+    if wanted.year != owned.year or wanted.month != owned.month:
+        return False
+
+    wanted_day = _known_day(issue.issue_date, *_metadata_sources(issue))
+    owned_day = _known_day(magazine.issue_date, *_metadata_sources(magazine))
+    if wanted_day and owned_day and wanted_day != owned_day:
+        return False
+
+    wanted_number = _issue_number_of(issue)
+    owned_number = _issue_number_of(magazine)
+    if wanted_number and owned_number and wanted_number.lower() != owned_number.lower():
+        return False
+
+    if _editions_conflict(_edition_of(issue), _edition_of(magazine)):
+        return False
+    return True
 
 
 class IssueDiscoveryService:
@@ -825,10 +982,15 @@ class IssueDiscoveryService:
         """
         Check if an issue is already in the library.
 
-        Uses two matching strategies:
-        1. Fuzzy date matching (primary) - handles date defaulting and season spanning
-        2. Fuzzy group ID matching (fallback) - handles missing dates by comparing
-           normalized title+date identifiers against library items
+        A library copy matches when the year and month agree. When both sides
+        know a day, an issue number, or an edition, those have to agree too:
+        the next week's paper, the next numbered issue, and a special edition
+        are not the monthly issue already on the shelf. The 1st of the month
+        with no time is the placeholder used for "January 2024", so it does
+        not by itself split a monthly.
+
+        If either side has no date, fall back to the fuzzy group id, which
+        compares normalized titles.
 
         Args:
             issue: DiscoveredIssue to check
@@ -843,21 +1005,17 @@ class IssueDiscoveryService:
         if not existing:
             return None
 
-        # Same calendar month only. A one-month tolerance treats the next
-        # issue as a copy of the one already in the library.
         if issue.issue_date:
-            issue_day = _as_date(issue.issue_date)
             for mag in existing:
-                if not mag.issue_date:
-                    continue
-                owned_day = _as_date(mag.issue_date)
-                if owned_day.year == issue_day.year and owned_day.month == issue_day.month:
-                    logger.debug(f"Library already has {owned_day.year}-{owned_day.month:02d}: {issue.title}")
+                if _same_library_issue(issue, mag):
+                    owned = _as_date(mag.issue_date)
+                    logger.debug(f"Library already has {owned.year}-{owned.month:02d}: {issue.title}")
                     return mag.id
 
-        # Fallback: match by fuzzy group ID against all library items (including dateless ones)
         if issue.fuzzy_match_group:
             for mag in existing:
+                if issue.issue_date and mag.issue_date:
+                    continue
                 if get_fuzzy_group_id(mag.title) == issue.fuzzy_match_group:
                     logger.debug(f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}")
                     return mag.id
