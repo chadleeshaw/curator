@@ -369,7 +369,17 @@ class TestDeadIndexerUrlIsNotSentToTheClient:
         _, session_factory = test_db
         session = session_factory()
         tracking = _tracking(session)
-        issue = _discovered(session, tracking, 7, status=DownloadStatus.WANTED)
+        search_result = {
+            "title": "Test Magazine July 2024",
+            "url": "http://example.com/2024-07.nzb",
+            "provider": "newsnab",
+            "pubdate": "2024-07-15T10:30:00Z",
+        }
+        issue_discovery_service.record_search_results(tracking.id, [search_result], session)
+        issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+        issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).one()
+        assert issue.download_status == DownloadStatus.WANTED
+
         cache = Mock()
         cache.get_nzb_content.side_effect = NzbContentRejected("retired")
         manager = DownloadManager(
@@ -385,12 +395,28 @@ class TestDeadIndexerUrlIsNotSentToTheClient:
         session.refresh(issue)
         assert issue.download_status == DownloadStatus.FAILED
         assert issue.attempt_count == 0
-        assert issue.id not in {item.id for item in issue_discovery_service.get_download_queue(session)}
 
-        issue.latest_url = "http://example.com/fresh.nzb"
-        issue.download_status = DownloadStatus.WANTED
-        session.commit()
-        assert issue.id in {item.id for item in issue_discovery_service.get_download_queue(session)}
+        def queued_ids():
+            return {item.id for item in issue_discovery_service.get_download_queue(session)}
+
+        assert issue.id not in queued_ids()
+
+        issue_discovery_service.record_search_results(tracking.id, [search_result], session)
+        issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.FAILED
+        assert issue.latest_url == search_result["url"]
+        assert issue.id not in queued_ids()
+
+        fresh = {**search_result, "url": "http://example.com/fresh.nzb"}
+        issue_discovery_service.record_search_results(tracking.id, [fresh], session)
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.DISCOVERED
+        assert issue.latest_url == fresh["url"]
+        issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.WANTED
+        assert issue.id in queued_ids()
         session.close()
 
 

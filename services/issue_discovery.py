@@ -243,23 +243,24 @@ class IssueDiscoveryService:
 
     # Statuses that should be re-evaluated when the issue is seen again in search results.
     # WANTED: not yet in the download pipeline — re-evaluate in case tracking rules changed.
-    # FAILED: download failed — re-seen result (possibly with a new URL) is a natural retry trigger.
+    # FAILED is handled separately: the same URL stays failed, and only a new URL
+    # is worth another fetch. Resetting every cycle re-downloads rejected releases.
     # Excluded intentionally:
     #   COMPLETED/DOWNLOADING/PENDING/QUEUED — terminal or mid-flight; re-evaluation would cause duplicates.
     #   IGNORED — deliberate exclusion; resetting would override user decisions on every search cycle.
     #   PERMANENTLY_FAILED — has an explicit admin override path (retry_permanently_failed).
-    _REEVALUATE_ON_RESEEN = frozenset({DownloadStatus.WANTED, DownloadStatus.FAILED})
+    _REEVALUATE_ON_RESEEN = frozenset({DownloadStatus.WANTED})
 
     def _update_existing_issue(self, existing: DiscoveredIssue, result: Dict[str, Any], parsed, pubdate, now) -> None:
         """Update an existing DiscoveredIssue with fresher data from a new search result.
 
-        If the issue is in a re-evaluable state (WANTED or FAILED), reset it to DISCOVERED
-        so that evaluate_discovered_issues will re-examine it on the next evaluation pass.
-        This ensures subsequent searches can re-evaluate issues whose circumstances have
-        changed (e.g. new URL, updated tracking rules).
+        WANTED issues return to DISCOVERED so tracking-rule changes are applied
+        on the next evaluation. A FAILED issue stays failed until the URL
+        changes; seeing the same rejected link again must not queue another fetch.
         """
         existing.last_seen = now
         existing.times_seen += 1
+        previous_url = existing.latest_url
 
         should_update_url = (
             pubdate is not None and (existing.latest_pubdate is None or pubdate > existing.latest_pubdate)
@@ -277,7 +278,7 @@ class IssueDiscoveryService:
         # A failed issue keeps its URL when the pubdate does not move, so a
         # repaired indexer (same release, new link) never replaces a dead one.
         # Skip an older hit so it cannot clobber a newer URL. Run this while
-        # the status is still FAILED; the reset below changes it.
+        # the status is still FAILED; a new URL resets it below.
         new_url = result.get("url")
         same_or_newer = pubdate is None or existing.latest_pubdate is None or pubdate >= existing.latest_pubdate
         if (
@@ -295,6 +296,14 @@ class IssueDiscoveryService:
         search_result_id = result.get("search_result_id")
         if search_result_id and search_result_id not in existing.search_result_ids:
             existing.search_result_ids.append(search_result_id)
+
+        url_changed = bool(existing.latest_url) and existing.latest_url != previous_url
+        if existing.download_status == DownloadStatus.FAILED:
+            if not url_changed:
+                return
+            logger.debug(f"Resetting failed {existing.fuzzy_match_group} because the URL changed")
+            existing.download_status = DownloadStatus.DISCOVERED
+            return
 
         if existing.download_status in self._REEVALUATE_ON_RESEEN:
             logger.debug(
