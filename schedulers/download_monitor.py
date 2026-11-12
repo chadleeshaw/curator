@@ -662,6 +662,33 @@ class DownloadMonitor:
 
         return tracking.delete_from_client_on_completion
 
+    def _hold_unmapped_download(self, submission: DownloadSubmission, session: Session) -> None:
+        """Keep a completed job the first time its file is not in the downloads directory.
+
+        The client path often does not match Curator's directory until path mapping
+        catches up. Deleting the job on that first miss removes a download that is
+        still on disk from the client's point of view. A second miss is a real
+        failure and may remove the client job.
+        """
+        message = (
+            f"File not found in downloads directory: {Path(submission.file_path).name} "
+            f"(searched: {self.downloads_dir})"
+        )
+        already_missed = (submission.last_error or "").startswith("File not found in downloads directory:")
+        submission.last_error = message
+        if not already_missed:
+            logger.warning(
+                f"Downloaded file not found in downloads directory: {submission.file_path} "
+                f"(searched in: {self.downloads_dir}). "
+                f"Leaving the client job in place; this is often a path mapping delay."
+            )
+            session.commit()
+            return
+
+        submission.status = DownloadSubmission.StatusEnum.FAILED
+        session.commit()
+        self._delete_finished_client_job(submission, "file missing", session)
+
     def _delete_finished_client_job(self, submission: DownloadSubmission, reason: str, session: Session) -> None:
         """Remove a finished job from the download client when tracking allows it."""
         if submission.job_id and self._should_delete_from_client(submission.tracking_id, session):
@@ -764,8 +791,6 @@ class DownloadMonitor:
                 else:
                     continue
 
-            # Internet Archive extracts store one path per line (older rows used
-            # commas). A comma in a SABnzbd storage path is part of the title.
             collection_paths = self._ia_collection_paths(submission)
             if collection_paths:
                 file_paths_str = collection_paths
@@ -817,15 +842,7 @@ class DownloadMonitor:
             file_path = self._find_file_in_downloads(submission.file_path)
 
             if not file_path:
-                logger.warning(
-                    f"Downloaded file not found in downloads directory: {submission.file_path} "
-                    f"(searched in: {self.downloads_dir}). "
-                    f"Check CURATOR_DOWNLOAD_DIR environment variable matches your download client's output directory."
-                )
-                submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = f"File not found in downloads directory: {Path(submission.file_path).name} (searched: {self.downloads_dir})"
-                session.commit()
-                self._delete_finished_client_job(submission, "file missing", session)
+                self._hold_unmapped_download(submission, session)
                 continue
 
             logger.debug(f"[DownloadMonitor] Found file at: {file_path}")
@@ -937,7 +954,11 @@ class DownloadMonitor:
         return False
 
     def _ia_collection_paths(self, submission: DownloadSubmission) -> Optional[list]:
-        """Paths from an Internet Archive extract, or None for a single file."""
+        """Paths from an Internet Archive extract, or None for a single file.
+
+        Extracts store one path per line. Older rows used commas. A comma in a
+        SABnzbd storage path is part of the title, so only IA submissions are split.
+        """
         if not submission.file_path or not self._submission_is_internet_archive(submission):
             return None
         return split_collection_paths(submission.file_path)

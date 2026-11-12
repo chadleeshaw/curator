@@ -1023,6 +1023,11 @@ async def lifespan(app: FastAPI):
             app_state.ocr_processor_task.shutdown()
             logger.info("OCR processor shutdown complete")
 
+        from web.routers.periodicals.files import shutdown_render_pools
+
+        shutdown_render_pools()
+        logger.info("PDF render pools shut down")
+
         logger.info("Curator shutdown complete")
     except Exception as e:
         logger.error(f"Shutdown error: {e}")
@@ -1036,7 +1041,6 @@ app = FastAPI(
     **DOCS_URLS,
 )
 
-# Origins come from CURATOR_CORS_ORIGINS or cors_origins. A wildcard is ignored.
 _cors_origins = app_state.config_loader.get_cors_origins()
 app.add_middleware(
     CORSMiddleware,

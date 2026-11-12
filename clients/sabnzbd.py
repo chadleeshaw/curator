@@ -18,6 +18,10 @@ from core.interfaces import DownloadClient
 
 logger = logging.getLogger(__name__)
 
+# Jobs that leave the queue are forgotten on the next poll. This cap covers a
+# poll that has not run yet, so a long-lived process cannot grow the map forever.
+_MAX_REMEMBERED_RATE_LIMITS = 128
+
 
 class SABnzbdClient(DownloadClient):
     """Download client for SABnzbd"""
@@ -204,6 +208,7 @@ class SABnzbdClient(DownloadClient):
 
         if slots:
             logger.debug(f"[SABnzbd] Queue slots: {[s.get('nzo_id') for s in slots]}")
+        self._forget_finished_rate_limits({slot.get("nzo_id") for slot in slots if slot.get("nzo_id")})
 
         for slot in slots:
             if slot.get("nzo_id") == job_id:
@@ -278,8 +283,7 @@ class SABnzbdClient(DownloadClient):
         if not wait_time:
             return None
 
-        if self._last_rate_limit_wait.get(job_id) != wait_time:
-            self._last_rate_limit_wait[job_id] = wait_time
+        if self._remember_rate_limit_wait(job_id, wait_time):
             logger.info(
                 f"[SABnzbd] Job {job_id} is rate limited by provider. "
                 f"Waiting {wait_time} seconds (~{wait_time / 3600:.1f} hours) before retry."
@@ -291,6 +295,28 @@ class SABnzbdClient(DownloadClient):
             "wait_time": wait_time,
             "message": f"Provider rate limit: waiting {wait_time}s (~{wait_time / 3600:.1f}h)",
         }
+
+    def _remember_rate_limit_wait(self, job_id: str, wait_time: int) -> bool:
+        """Remember the wait last logged for this job.
+
+        Reinserting the job makes it the newest entry, so the cap drops an
+        older job rather than the one just seen. The map never grows past
+        _MAX_REMEMBERED_RATE_LIMITS.
+        """
+        changed = self._last_rate_limit_wait.get(job_id) != wait_time
+        self._last_rate_limit_wait.pop(job_id, None)
+        self._last_rate_limit_wait[job_id] = wait_time
+        overflow = len(self._last_rate_limit_wait) - _MAX_REMEMBERED_RATE_LIMITS
+        if overflow > 0:
+            for stale_id in list(self._last_rate_limit_wait)[:overflow]:
+                del self._last_rate_limit_wait[stale_id]
+        return changed
+
+    def _forget_finished_rate_limits(self, active_job_ids: set) -> None:
+        """Drop waits for jobs that are no longer in the queue."""
+        stale = [job_id for job_id in self._last_rate_limit_wait if job_id not in active_job_ids]
+        for job_id in stale:
+            del self._last_rate_limit_wait[job_id]
 
     def _check_history_status(self, job_id: str) -> Optional[Dict[str, Any]]:
         """Check if job is in history and return its status."""

@@ -39,19 +39,23 @@ nano local/config/config.yaml
 # Run with Docker
 docker run -d \
   --name curator \
+  -e PUID=1000 \
+  -e PGID=1000 \
   -p 8000:8000 \
   -v $(pwd)/local/config:/app/local/config \
   -v $(pwd)/local/data:/app/local/data \
   -v $(pwd)/local/downloads:/app/local/downloads \
-  chadleeshaw/curator:latest
+  ghcr.io/chadleeshaw/curator:latest
 ```
+
+`PUID` and `PGID` select the user the server runs as. They default to 1000 and must not be 0: the container refuses to run as root. On startup it creates that user if needed, changes ownership of the writable data directories only (`/app/local/config`, `/app/local/data`, downloads, cache, and logs), and drops privileges with `setpriv`. The application files stay owned by root.
 
 **Docker Compose:**
 
 ```yaml
 services:
   curator:
-    image: chadleeshaw/curator:latest
+    image: ghcr.io/chadleeshaw/curator:latest
     container_name: curator
     restart: unless-stopped
     ports:
@@ -61,6 +65,8 @@ services:
       - ./local/data:/app/local/data
       - ./local/downloads:/app/local/downloads
     environment:
+      - PUID=1000
+      - PGID=1000
       - TZ=America/New_York
 ```
 

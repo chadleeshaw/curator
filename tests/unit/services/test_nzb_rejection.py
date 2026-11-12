@@ -6,12 +6,14 @@ from unittest.mock import MagicMock, Mock, patch
 import httpx
 import pytest
 
+from clients.qbittorrent import QBittorrentClient
 from core.parsers.date import utc_now
 from models.cache import NzbCache
-from models.database import DownloadStatus
+from models.database import DownloadStatus, PeriodicalTracking
 from services.cache.provider_cache import NzbCacheService, NzbContentRejected
 from services.download.nzb_submit import submit_with_nzb_content
 from services.download.queue_processor import release_linked_issue
+from services.download_manager import DownloadManager
 
 ERROR_XML = (
     '<?xml version="1.0" encoding="UTF-8"?>'
@@ -105,6 +107,84 @@ class TestNzbContentRejected:
 
         assert client.submitted_url is None
         assert client.submitted_content is None
+
+
+class TestHttpStatusIsRejectedOnlyForClientErrors:
+    """429 and 5xx leave the URL for a later try. Other 4xx do not."""
+
+    def _status_error(self, status_code):
+        response = _response("")
+        response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            f"HTTP {status_code}",
+            request=MagicMock(),
+            response=MagicMock(status_code=status_code),
+        )
+        return response
+
+    @pytest.mark.parametrize("status_code", [429, 503])
+    def test_rate_limits_and_server_errors_are_transient(self, tmp_path, status_code):
+        service = NzbCacheService(cache_db_path=str(tmp_path / "cache.db"))
+
+        with patch("services.cache.provider_cache.httpx.get", return_value=self._status_error(status_code)):
+            assert service.get_nzb_content(DOWNLOAD_URL) is None
+
+        client = _ContentClient()
+        with patch("services.cache.provider_cache.httpx.get", return_value=self._status_error(status_code)):
+            job_id = submit_with_nzb_content(client, DOWNLOAD_URL, "Issue", nzb_cache_service=service)
+
+        assert job_id == "url-job"
+        assert client.submitted_url == DOWNLOAD_URL
+
+    def test_not_found_is_rejected(self, tmp_path):
+        service = NzbCacheService(cache_db_path=str(tmp_path / "cache.db"))
+
+        with patch("services.cache.provider_cache.httpx.get", return_value=self._status_error(404)):
+            with pytest.raises(NzbContentRejected, match="HTTP 404"):
+                service.get_nzb_content(DOWNLOAD_URL)
+
+
+class TestTorrentGrabsSkipTheNzbCache:
+    """qBittorrent implements submit_content, but a .torrent URL is not an NZB."""
+
+    def test_qbittorrent_torrent_url_is_submitted_by_url(self, test_db):
+        torrent_url = "http://prowlarr.local/1/download/issue.torrent?apikey=secret"
+        client = QBittorrentClient(
+            {
+                "name": "qBittorrent",
+                "type": "qbittorrent",
+                "api_url": "http://localhost:8090",
+                "username": "admin",
+                "password": "secret",
+            }
+        )
+        cache = Mock()
+        cache.get_nzb_content.side_effect = NzbContentRejected("response is not NZB XML")
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = PeriodicalTracking(olid="weekly", title="City Paper", track_all_editions=True, user_id=1)
+        session.add(tracking)
+        session.commit()
+        manager = DownloadManager(
+            search_providers=[],
+            download_client=client,
+            download_clients={"qbittorrent": client},
+            nzb_cache_service=cache,
+        )
+
+        with patch.object(client, "submit", return_value="abc123") as submit:
+            submission = manager._submit_to_client(
+                tracking.id,
+                {"title": "City Paper 2024-01-07", "url": torrent_url, "provider": "torznab"},
+                session,
+            )
+
+        assert submission is not None
+        assert submission.job_id == "abc123"
+        assert submission.client_name == "qBittorrent"
+        cache.get_nzb_content.assert_not_called()
+        submit.assert_called_once()
+        assert submit.call_args.kwargs["url"] == torrent_url
+        session.close()
 
 
 class TestReleaseLinkedIssue:

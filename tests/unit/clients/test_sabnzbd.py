@@ -514,6 +514,41 @@ def test_rate_limit_is_logged_once_until_the_wait_changes(caplog):
     assert all(record.levelno == logging.INFO for record in caplog.records if "rate limited" in record.message)
 
 
+def test_rate_limit_memory_does_not_grow_without_bound():
+    """A long run of distinct jobs cannot keep every wait forever."""
+    client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})
+
+    for index in range(200):
+        client._check_rate_limit_status(f"nzo_{index}", "WAIT 10 seconds until retry", [])
+
+    assert len(client._last_rate_limit_wait) == 128
+    assert "nzo_199" in client._last_rate_limit_wait
+    assert "nzo_0" not in client._last_rate_limit_wait
+
+
+def test_queue_poll_forgets_rate_limits_for_jobs_that_left():
+    """A job that is gone from the queue is not remembered on the next poll."""
+    client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})
+    client._last_rate_limit_wait["gone"] = 3600
+    client._last_rate_limit_wait["nzo_live"] = 1800
+
+    def fake_get(url, params=None, timeout=None):
+        response = Mock()
+        response.raise_for_status = Mock()
+        if params.get("mode") == "queue":
+            response.json.return_value = {
+                "queue": {"slots": [{"nzo_id": "nzo_live", "status": "Downloading", "percentage": 10, "labels": []}]}
+            }
+        else:
+            response.json.return_value = {"history": {"slots": []}}
+        return response
+
+    with patch("clients.sabnzbd.httpx.get", side_effect=fake_get):
+        assert client.get_status("nzo_live")["status"] == "downloading"
+
+    assert "gone" not in client._last_rate_limit_wait
+
+
 def test_sabnzbd_job_missing_from_queue_and_history_is_unknown():
     """A job that really is gone is still reported as unknown."""
     client = SABnzbdClient({"api_url": "http://localhost:8080", "api_key": "test-key"})

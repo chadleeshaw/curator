@@ -120,6 +120,9 @@ class Periodical(Base):
     language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)
     category = Column(String(100), nullable=True, default=DEFAULT_CATEGORY, index=True)
     issue_date = Column(UTCDateTime, nullable=False, index=True)
+    # "day", "month", or "year": how much of issue_date was parsed. Null on rows
+    # that have not been backfilled. Midnight on the 1st is not this signal.
+    date_precision = Column(String(8), nullable=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
     content_hash = Column(String(64), nullable=True, index=True)
@@ -137,6 +140,7 @@ class Periodical(Base):
             "language": self.language,
             "category": self.category,
             "issue_date": _iso(self.issue_date),
+            "date_precision": self.date_precision,
             "file_path": self.file_path,
             "cover_path": self.cover_path,
             "content_hash": self.content_hash,
@@ -415,6 +419,8 @@ class DiscoveredIssue(Base):
     fuzzy_match_group = Column(String(255), nullable=False, index=True)
 
     issue_date = Column(UTCDateTime, nullable=True, index=True)
+    # "day", "month", or "year": how much of issue_date was parsed.
+    date_precision = Column(String(8), nullable=True)
     issue_number = Column(String(50), nullable=True)
     year = Column(Integer, nullable=True, index=True)
     month = Column(Integer, nullable=True, index=True)
@@ -457,6 +463,7 @@ class DiscoveredIssue(Base):
             "normalized_title": self.normalized_title,
             "fuzzy_match_group": self.fuzzy_match_group,
             "issue_date": _iso(self.issue_date),
+            "date_precision": self.date_precision,
             "issue_number": self.issue_number,
             "year": self.year,
             "month": self.month,

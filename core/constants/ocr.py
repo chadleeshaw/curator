@@ -90,5 +90,12 @@ accuracy on tested fixtures with ~45% faster Tesseract processing. 300 DPI basel
 PNG_GENERATION_TIMEOUT = 120
 """Per-PDF timeout in seconds for the OCR image. A slow page must not cancel the others."""
 
+MAX_OCR_RETRIES = 3
+"""Attempts for one OCR job, including the first try.
+
+A timed-out cover image is tried again. The download retry limit is one
+attempt, which would fail the job on the first timeout.
+"""
+
 PDF_TEXT_SCAN_TIMEOUT = 3
 """Timeout in seconds for direct PDF text extraction (pypdf can hang on corrupted PDFs)"""

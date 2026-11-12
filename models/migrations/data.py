@@ -11,6 +11,7 @@ Current migrations:
 
 import logging
 
+from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session
 
 from core.utils.metadata_builder import build_derived_metadata
@@ -29,8 +30,9 @@ def _migrate_single_periodical(periodical: Periodical) -> bool:
     Returns:
         True if migration was performed, False if already migrated
     """
-    # Skip if already migrated (has parsed_metadata)
-    if periodical.parsed_metadata is not None:
+    # Skip if already migrated. JSON null loads as None, and a literal
+    # "null" string is the same unset value written by older drivers.
+    if not _parsed_metadata_is_unset(periodical.parsed_metadata):
         return False
 
     old_metadata = periodical.extra_metadata or {}
@@ -100,6 +102,15 @@ def _migrate_single_periodical(periodical: Periodical) -> bool:
     return True
 
 
+def _parsed_metadata_is_unset(value) -> bool:
+    """True for SQL NULL, JSON null, and the literal null string."""
+    if value is None:
+        return True
+    if isinstance(value, str) and value.strip().lower() == "null":
+        return True
+    return False
+
+
 def migrate_metadata_structure(session: Session) -> int:
     """
     Migrate all periodicals from old to new metadata structure.
@@ -117,8 +128,10 @@ def migrate_metadata_structure(session: Session) -> int:
         This migration is idempotent - safe to run multiple times.
         Records with parsed_metadata already set are skipped.
     """
-    # Check if any periodicals need migration
-    unmigrated_count = session.query(Periodical).filter(Periodical.parsed_metadata.is_(None)).count()
+    # SQL NULL and JSON null both mean the new columns were never written.
+    # The ORM stores Python None as the text 'null', which IS NULL does not match.
+    needs_migration = or_(Periodical.parsed_metadata.is_(None), cast(Periodical.parsed_metadata, String) == "null")
+    unmigrated_count = session.query(Periodical).filter(needs_migration).count()
 
     if unmigrated_count == 0:
         logger.debug("No periodicals need metadata structure migration")
@@ -129,23 +142,22 @@ def migrate_metadata_structure(session: Session) -> int:
     migrated_count = 0
     batch_size = 100
 
-    # Process in batches
-    for offset in range(0, unmigrated_count, batch_size):
-        periodicals = (
-            session.query(Periodical)
-            .filter(Periodical.parsed_metadata.is_(None))
-            .offset(offset)
-            .limit(batch_size)
-            .all()
-        )
-
+    # Re-query each batch. Offsetting a shrinking filter would skip rows.
+    # Stop if a batch still matches the filter but none of its rows change,
+    # which would otherwise spin forever.
+    while True:
+        periodicals = session.query(Periodical).filter(needs_migration).limit(batch_size).all()
+        if not periodicals:
+            break
+        progressed = 0
         for periodical in periodicals:
             if _migrate_single_periodical(periodical):
-                migrated_count += 1
-
-        # Commit batch
+                progressed += 1
         session.commit()
-        logger.debug(f"Migrated {offset + len(periodicals)}/{unmigrated_count} periodicals...")
+        migrated_count += progressed
+        if progressed == 0:
+            logger.warning("Stopping metadata migration; a batch made no progress")
+            break
 
     logger.info(f"✓ Migrated metadata structure for {migrated_count} periodical(s)")
     return migrated_count

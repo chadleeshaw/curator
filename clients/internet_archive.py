@@ -54,7 +54,10 @@ _VALID_IA_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$")
 
 
 class DownloadJob:  # pylint: disable=too-many-instance-attributes
-    """Represents a single download job"""
+    """One Internet Archive download.
+
+    file_path is a single file, or newline-joined paths for a collection.
+    """
 
     def __init__(
         self,
@@ -71,7 +74,7 @@ class DownloadJob:  # pylint: disable=too-many-instance-attributes
         self.prefer_collection = prefer_collection  # Prefer ZIP/TAR collection formats
         self.status = IA_STATUS_PENDING
         self.progress = 0
-        self.file_path: Optional[str] = None  # Single file, or newline-joined paths for a collection
+        self.file_path: Optional[str] = None
         self.error: Optional[str] = None
         self.expected_size = 0
         self.downloaded_size = 0

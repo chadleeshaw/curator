@@ -179,17 +179,20 @@ class DownloadManager:
         nzb_url: str,
         title: str,
         category: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> Optional[str]:
         """
         Submit a download, preferring cached NZB content over URL to avoid provider rate limits.
 
         Delegates to the shared submit_with_nzb_content helper in services.download.nzb_submit.
+        Torrent clients and non-NZB providers skip the cache and submit the URL.
 
         Args:
             client: Download client to submit to
-            nzb_url: NZB download URL
+            nzb_url: NZB download URL, or a torrent/magnet URL
             title: Download title
             category: Optional download category
+            provider: Provider type when known (newsnab, rss, torznab, ...)
 
         Returns:
             Job ID from download client, or None if all methods failed
@@ -200,6 +203,7 @@ class DownloadManager:
             title=title,
             category=category,
             nzb_cache_service=self.nzb_cache_service,
+            provider=provider,
         )
 
     def _get_client_by_name(self, client_name: Optional[str]) -> DownloadClient:
@@ -694,6 +698,7 @@ class DownloadManager:
                 nzb_url=search_result["url"],
                 title=title,
                 category=download_category,
+                provider=provider,
             )
 
             if not job_id:
@@ -884,6 +889,9 @@ class DownloadManager:
         """
         Submit discovered issue to download client.
 
+        The attempt counter moves when the client reports a failure, not when
+        it accepts the job.
+
         Args:
             issue: DiscoveredIssue record
             search_result: Search result dict
@@ -910,6 +918,7 @@ class DownloadManager:
                 nzb_url=issue.latest_url,
                 title=issue.title,
                 category=download_category,
+                provider=provider,
             )
 
             if not job_id:
@@ -929,9 +938,7 @@ class DownloadManager:
                 attempt_count=1,
             )
 
-            # Update DiscoveredIssue with submission info. The attempt counter
-            # moves when the client reports a failure, not when it accepts the job.
-            issue.download_status = DownloadStatus.PENDING  # Submitted to and accepted by download client
+            issue.download_status = DownloadStatus.PENDING
             issue.current_submission_id = submission.id
             self._register_submission_id(issue, submission.id)
 

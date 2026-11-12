@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from core.interfaces import DownloadClient
+from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import (
     DiscoveredIssue,
     DownloadStatus,
@@ -169,6 +170,302 @@ class TestNeighboringMonthIsADifferentIssue:
         assert stats["already_have"] == 1
         assert january.download_status == DownloadStatus.COMPLETED
         assert january.periodical_id == owned.id
+        session.close()
+
+
+class TestWeekliesAndSpecialsAreDistinctIssues:
+    """A shared year and month is not enough when a closer identity is known."""
+
+    def _pair(self, session, tracking, owned_date, wanted_date, precision="day"):
+        owned = _library_issue(session, tracking, owned_date.month, owned_date.year)
+        owned.issue_date = owned_date
+        owned.date_precision = precision
+        wanted = _discovered(session, tracking, wanted_date.month, wanted_date.year)
+        wanted.issue_date = wanted_date
+        wanted.date_precision = precision
+        wanted.fuzzy_match_group = get_fuzzy_group_id(owned.title)
+        session.commit()
+        return owned, wanted
+
+    def test_a_later_week_is_not_already_owned(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._pair(session, tracking, datetime(2024, 1, 7), datetime(2024, 1, 14))
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        assert wanted.periodical_id is None
+        session.close()
+
+    def test_the_same_week_is_already_owned(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._pair(session, tracking, datetime(2024, 1, 7), datetime(2024, 1, 7))
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+    def test_a_dated_first_of_the_month_is_not_the_following_week(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._pair(session, tracking, datetime(2024, 1, 1), datetime(2024, 1, 8))
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_special_edition_is_not_the_monthly_issue(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session)
+        _, wanted = self._pair(session, tracking, datetime(2024, 1, 15), datetime(2024, 1, 15))
+        wanted.extra_metadata = {"is_special_edition": True, "special_edition_name": "Holiday Special"}
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_named_special_is_not_an_unnamed_special(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._pair(session, tracking, datetime(2024, 1, 15), datetime(2024, 1, 15))
+        owned.extra_metadata = {"is_special_edition": True}
+        wanted.extra_metadata = {"is_special_edition": True, "special_edition_name": "Holiday Special"}
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_the_same_special_edition_is_already_owned(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session)
+        owned, wanted = self._pair(session, tracking, datetime(2024, 1, 15), datetime(2024, 1, 15))
+        edition = {"is_special_edition": True, "special_edition_name": "Holiday Special"}
+        owned.extra_metadata = edition
+        owned.title = "Test Magazine Holiday Special"
+        wanted.extra_metadata = dict(edition)
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+    def test_a_different_issue_number_is_not_already_owned(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session)
+        owned, wanted = self._pair(session, tracking, datetime(2024, 1, 1), datetime(2024, 1, 1))
+        owned.derived_metadata = {"issue_number": {"value": "12", "source": "file_scan", "confidence": 1}}
+        wanted.issue_number = "13"
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_the_same_issue_number_is_already_owned(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session)
+        owned, wanted = self._pair(session, tracking, datetime(2024, 1, 1), datetime(2024, 1, 1))
+        owned.derived_metadata = {"issue_number": {"value": "12", "source": "file_scan", "confidence": 1}}
+        wanted.issue_number = "12"
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+
+class TestDatePrecisionNotTheClock:
+    """The day is known only when date_precision says so."""
+
+    def _owned_and_wanted(self, session, tracking, owned_precision, wanted_precision, owned_day, wanted_day):
+        owned = _library_issue(session, tracking, 1)
+        owned.issue_date = datetime(2024, 1, owned_day)
+        owned.date_precision = owned_precision
+        wanted = _discovered(session, tracking, 1)
+        wanted.issue_date = datetime(2024, 1, wanted_day)
+        wanted.date_precision = wanted_precision
+        wanted.fuzzy_match_group = get_fuzzy_group_id(owned.title)
+        session.commit()
+        return owned, wanted
+
+    def test_a_month_only_issue_does_not_block_a_later_week(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "month", "day", 1, 14)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_month_only_issue_does_not_block_a_different_issue_number(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, "month", "month", 1, 1)
+        owned.derived_metadata = {"issue_number": {"value": "12", "source": "file_scan", "confidence": 1}}
+        wanted.issue_number = "13"
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_genuine_first_is_compared_by_day(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, later = self._owned_and_wanted(session, tracking, "day", "day", 1, 8)
+        same = _discovered(session, tracking, 1)
+        same.issue_date = datetime(2024, 1, 1)
+        same.date_precision = "day"
+        same.fuzzy_match_group = "city-paper-jan-1"
+        same.title = "City Paper 2024-01-01"
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(later)
+        session.refresh(same)
+        assert later.download_status == DownloadStatus.WANTED
+        assert later.periodical_id is None
+        assert same.download_status == DownloadStatus.COMPLETED
+        session.close()
+
+    def test_two_month_only_issues_in_the_same_month_are_duplicates(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, "month", "month", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+    def test_a_year_only_issue_does_not_match_the_january_issue(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "month", "year", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_year_only_issue_does_not_match_a_dated_day(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "day", "year", 14, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_two_year_only_issues_in_the_same_year_are_duplicates(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, "year", "year", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+    def test_a_year_only_issue_does_not_match_a_legacy_january_first(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, None, "year", 1, 1)
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
+    def test_a_legacy_year_only_row_still_matches_another_year_only_issue(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._owned_and_wanted(session, tracking, None, "year", 1, 1)
+        owned.extra_metadata = {"year": 2024}
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 1
+        assert wanted.periodical_id == owned.id
+        session.close()
+
+    def test_two_month_only_issues_with_different_editions_are_not_duplicates(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        _, wanted = self._owned_and_wanted(session, tracking, "month", "month", 1, 1)
+        wanted.extra_metadata = {"is_special_edition": True, "special_edition_name": "Holiday Special"}
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
         session.close()
 
 
@@ -369,7 +666,17 @@ class TestDeadIndexerUrlIsNotSentToTheClient:
         _, session_factory = test_db
         session = session_factory()
         tracking = _tracking(session)
-        issue = _discovered(session, tracking, 7, status=DownloadStatus.WANTED)
+        search_result = {
+            "title": "Test Magazine July 2024",
+            "url": "http://example.com/2024-07.nzb",
+            "provider": "newsnab",
+            "pubdate": "2024-07-15T10:30:00Z",
+        }
+        issue_discovery_service.record_search_results(tracking.id, [search_result], session)
+        issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+        issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).one()
+        assert issue.download_status == DownloadStatus.WANTED
+
         cache = Mock()
         cache.get_nzb_content.side_effect = NzbContentRejected("retired")
         manager = DownloadManager(
@@ -385,13 +692,40 @@ class TestDeadIndexerUrlIsNotSentToTheClient:
         session.refresh(issue)
         assert issue.download_status == DownloadStatus.FAILED
         assert issue.attempt_count == 0
-        assert issue.id not in {item.id for item in issue_discovery_service.get_download_queue(session)}
 
-        issue.latest_url = "http://example.com/fresh.nzb"
-        issue.download_status = DownloadStatus.WANTED
-        session.commit()
-        assert issue.id in {item.id for item in issue_discovery_service.get_download_queue(session)}
+        def queued_ids():
+            return {item.id for item in issue_discovery_service.get_download_queue(session)}
+
+        assert issue.id not in queued_ids()
+
+        issue_discovery_service.record_search_results(tracking.id, [search_result], session)
+        issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.FAILED
+        assert issue.latest_url == search_result["url"]
+        assert issue.id not in queued_ids()
+
+        fresh = {**search_result, "url": "http://example.com/fresh.nzb"}
+        issue_discovery_service.record_search_results(tracking.id, [fresh], session)
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.DISCOVERED
+        assert issue.latest_url == fresh["url"]
+        issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.WANTED
+        assert issue.id in queued_ids()
         session.close()
+
+
+def test_png_generation_uses_the_module_clock():
+    """The parallel PNG helper should not import time under another name."""
+    import inspect
+
+    from services.ocr.queue import _generate_pngs_parallel
+
+    source = inspect.getsource(_generate_pngs_parallel)
+    assert "import time" not in source
+    assert "time.monotonic" in source
 
 
 class TestOcrTimeoutCountsAsAnAttempt:
@@ -429,4 +763,44 @@ class TestOcrTimeoutCountsAsAnAttempt:
         assert job.status == OCRJob.StatusEnum.FAILED
         assert job.attempt_count == 2
         assert job.last_error == "OCR image generation timed out"
+        session.close()
+
+    def test_a_timeout_retries_with_the_scheduler_limit(self, test_db, tmp_path, monkeypatch):
+        from core.constants.app import MAX_DOWNLOAD_RETRIES
+        from core.constants.ocr import MAX_OCR_RETRIES
+
+        _, session_factory = test_db
+        session = session_factory()
+        pdf_path = tmp_path / "issue.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4")
+        magazine = Periodical(
+            title="Test Magazine",
+            issue_date=datetime(2024, 1, 1),
+            file_path=str(pdf_path),
+            user_id=1,
+        )
+        session.add(magazine)
+        session.commit()
+        job = OCRJob(periodical_id=magazine.id, status=OCRJob.StatusEnum.PENDING, attempt_count=0)
+        session.add(job)
+        session.commit()
+
+        def timeout(jobs, timeout=120):
+            return {item["periodical_id"]: "timeout" for item in jobs}
+
+        monkeypatch.setattr("services.ocr.queue._generate_pngs_parallel", timeout)
+        monkeypatch.setattr("services.ocr.queue.ConfigLoader", MagicMock())
+        service = OCRQueueService()
+
+        assert MAX_OCR_RETRIES > MAX_DOWNLOAD_RETRIES
+        for attempt in range(1, MAX_OCR_RETRIES):
+            service.process_queue(session, batch_size=1, max_retries=MAX_OCR_RETRIES)
+            session.refresh(job)
+            assert job.status == OCRJob.StatusEnum.PENDING
+            assert job.attempt_count == attempt
+
+        service.process_queue(session, batch_size=1, max_retries=MAX_OCR_RETRIES)
+        session.refresh(job)
+        assert job.status == OCRJob.StatusEnum.FAILED
+        assert job.attempt_count == MAX_OCR_RETRIES
         session.close()

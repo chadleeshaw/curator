@@ -747,11 +747,8 @@ class TestSecondSearchReEvaluation:
 
         session.close()
 
-    def test_failed_issues_re_evaluated_on_second_search(self, test_db, issue_discovery_service):
-        """
-        Issues in FAILED status should be reset to DISCOVERED on re-search so they
-        can be re-evaluated with potentially updated URL/provider data.
-        """
+    def test_failed_issues_stay_failed_until_the_url_changes(self, test_db, issue_discovery_service):
+        """A failed issue is fetched again only when a later search has a new URL."""
         engine, session_factory = test_db
         session = session_factory()
 
@@ -766,7 +763,6 @@ class TestSecondSearchReEvaluation:
 
         search_results = self._make_search_results([("Test Magazine February 2024", "2024-02-15T10:30:00Z")])
 
-        # First search + evaluate + simulate failure
         issue_discovery_service.record_search_results(
             tracking_id=tracking.id, search_results=search_results, session=session
         )
@@ -775,16 +771,20 @@ class TestSecondSearchReEvaluation:
         issue.download_status = DownloadStatus.FAILED
         session.commit()
 
-        # Second search — should reset FAILED → DISCOVERED
         issue_discovery_service.record_search_results(
             tracking_id=tracking.id, search_results=search_results, session=session
         )
         session.refresh(issue)
-        assert (
-            issue.download_status == DownloadStatus.DISCOVERED
-        ), "FAILED issue should be reset to DISCOVERED so it can be re-evaluated"
+        assert issue.download_status == DownloadStatus.FAILED
 
-        # Second evaluate — should be WANTED again
+        search_results[0]["url"] = "http://example.com/fresh.nzb"
+        issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        session.refresh(issue)
+        assert issue.download_status == DownloadStatus.DISCOVERED
+        assert issue.latest_url == "http://example.com/fresh.nzb"
+
         eval_stats = issue_discovery_service.evaluate_discovered_issues(tracking_id=tracking.id, session=session)
         assert eval_stats["wanted"] == 1
 
@@ -948,7 +948,7 @@ class TestFailedIssueUrlRefresh:
 
         assert existing.latest_url == "http://indexer.example/old"
         assert existing.latest_pubdate == datetime(2024, 2, 1)
-        assert existing.download_status == DownloadStatus.DISCOVERED
+        assert existing.download_status == DownloadStatus.FAILED
 
     def test_permanently_failed_keeps_url_and_status(self, issue_discovery_service):
         existing = self._issue(DownloadStatus.PERMANENTLY_FAILED)

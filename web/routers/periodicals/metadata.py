@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from fastapi import Depends
 
-from core.constants.date import NUMBER_TO_MONTH
+from core.constants.date import DATE_PRECISION_MONTH, DATE_PRECISION_YEAR, MONTH_TO_NUMBER, NUMBER_TO_MONTH
 from core.utils.db import mark_json_modified, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir
@@ -20,6 +20,31 @@ from web.routers.auth import get_verify_token
 
 router = _shared.router
 logger = _shared.logger
+
+
+def _recognized_month(month_str: Any) -> int:
+    """Month number when the text names a real month, otherwise 0.
+
+    Names such as March count, and so do ``3`` and ``03``. ``0``, ``13``, and
+    other junk do not. ``parse_month_string`` would turn those into January,
+    which is not evidence the user supplied a month.
+    """
+    if month_str is None or isinstance(month_str, bool):
+        return 0
+    text = str(month_str).strip()
+    if not text:
+        return 0
+    first = text
+    for separator in ("/", "-", "&"):
+        if separator in first:
+            first = first.split(separator)[0].strip()
+            break
+    if first.isdigit():
+        number = int(first)
+        if 1 <= number <= 12:
+            return number
+        return 0
+    return MONTH_TO_NUMBER.get(first.lower(), 0)
 
 
 @router.post("/periodicals/{magazine_id}/toggle-special-edition")
@@ -151,14 +176,19 @@ async def update_periodical(
 
         if year_provided:
             year = int(updates["year"])
-            month_str = updates.get("month", "")
-            month_num, _ = _shared.parse_month_string(month_str)
+            month_num = _recognized_month(updates.get("month"))
 
             try:
-                periodical.issue_date = datetime(year, month_num, 1, tzinfo=UTC)
+                if month_num:
+                    periodical.issue_date = datetime(year, month_num, 1, tzinfo=UTC)
+                    periodical.date_precision = DATE_PRECISION_MONTH
+                else:
+                    periodical.issue_date = datetime(year, 1, 1, tzinfo=UTC)
+                    periodical.date_precision = DATE_PRECISION_YEAR
             except ValueError:
                 logger.warning(f"Invalid date: year={year}, month={month_num}")
                 periodical.issue_date = datetime(year, 1, 1, tzinfo=UTC)
+                periodical.date_precision = DATE_PRECISION_YEAR
 
         if "issue_number" in updates:
             periodical.derived_metadata["issue_number"] = {
