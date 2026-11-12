@@ -102,7 +102,10 @@ class TestAutoMetadataScan:
     def test_fixes_a_path_by_filename_when_no_category_marker_matches(self, tmp_path, session):
         library = tmp_path / "library"
         resolved = _write(library / "loose" / "Wired - December2024.pdf", "loose")
-        stored = "/var/lib/docker/lost/Wired - December2024.pdf"
+        # A path that is not on disk and has no category folder. GitHub runners
+        # have /var/lib/docker, and Path.exists() raises there instead of
+        # returning false, so the missing path stays inside tmp_path.
+        stored = str(tmp_path / "missing" / "lost" / "Wired - December2024.pdf")
         periodical = _add_periodical(session, stored)
 
         stats, _text_scan = _run(_service(library), session)
