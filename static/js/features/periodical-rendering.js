@@ -11,6 +11,9 @@
 import { APIClient, APIHelper } from '../core/api.js';
 import { UIUtils } from '../core/ui-utils.js';
 
+// Group key the page route uses for issues with no detected date.
+const UNDATED = 'Undated';
+
 /**
  * Load languages from API and populate the edit-language dropdown
  *
@@ -62,13 +65,10 @@ export function updateSubtitle(currentSortField, yearsData) {
   const subtitle = document.getElementById('periodical-subtitle');
   if (!subtitle) return;
 
-  // For issue_date sort, detect if grouped by year or volume
+  // A magazine with no dated issues is grouped by volume instead of year
   let issueGroupingLabel = 'Grouped by Publication Date';
   if (currentSortField === 'issue_date' && yearsData.length > 0) {
-    // Check if the grouping keys look like years (numeric 4-digit) or volumes
-    const firstKey = String(yearsData[0].year);
-    const looksLikeYear = /^\d{4}$/.test(firstKey);
-    issueGroupingLabel = looksLikeYear ? 'Grouped by Year' : 'Grouped by Volume';
+    issueGroupingLabel = isOnlyUndated(yearsData) ? 'Grouped by Volume' : 'Grouped by Year';
   }
 
   const subtitles = {
@@ -153,6 +153,80 @@ export function getVolumeNumber(data) {
 }
 
 /**
+ * Issue number from periodical metadata
+ * @param {Object} data - The periodical data object
+ * @returns {number} The issue number or 0 if not found
+ */
+function getIssueNumber(data) {
+  const value = data.derived_metadata?.issue_number?.value ?? data.metadata?.issue_number;
+  return parseInt(value, 10) || 0;
+}
+
+/**
+ * Order by volume, then issue number.
+ * @param {Object} a
+ * @param {Object} b
+ * @returns {number}
+ */
+function compareVolumeAndIssue(a, b) {
+  return getVolumeNumber(a) - getVolumeNumber(b) || getIssueNumber(a) - getIssueNumber(b);
+}
+
+/**
+ * Card label for an issue with no date, such as "Vol. 3 · No. 12".
+ * @param {Object} issue
+ * @returns {string}
+ */
+export function describeUndatedIssue(issue) {
+  const parts = [];
+  const volume = getVolumeNumber(issue);
+  const number = getIssueNumber(issue);
+  if (volume) parts.push(`Vol. ${volume}`);
+  if (number) parts.push(`No. ${number}`);
+  return parts.length ? parts.join(' · ') : UNDATED;
+}
+
+/**
+ * True when every year group is the server's undated group.
+ * @param {Array} yearsData
+ * @returns {boolean}
+ */
+function isOnlyUndated(yearsData) {
+  return yearsData.length > 0 && yearsData.every((group) => group.year === UNDATED);
+}
+
+/**
+ * Sections for the grouped view. Years keep their groups and undated issues
+ * stay in one group. A magazine with only undated issues is split by volume.
+ * `order` is the number to sort sections by; null sorts last either way.
+ * @param {Array} yearsData
+ * @returns {Array<{label: string, order: number|null, issues: Array}>}
+ */
+function groupSections(yearsData) {
+  if (!isOnlyUndated(yearsData)) {
+    return yearsData.map((group) => ({
+      label: String(group.year),
+      order: group.year === UNDATED ? null : Number(group.year),
+      issues: group.issues,
+    }));
+  }
+
+  const byVolume = new Map();
+  yearsData
+    .flatMap((group) => group.issues)
+    .forEach((issue) => {
+      const volume = getVolumeNumber(issue);
+      if (!byVolume.has(volume)) byVolume.set(volume, []);
+      byVolume.get(volume).push(issue);
+    });
+  return [...byVolume].map(([volume, issues]) => ({
+    label: volume ? `Volume ${volume}` : UNDATED,
+    order: volume || null,
+    issues,
+  }));
+}
+
+/**
  * Sort issues based on current sort field and order
  * @param {Array} issues - Array of issue objects
  * @param {string} currentSortField
@@ -165,14 +239,14 @@ export function sortIssues(issues, currentSortField, sortAscending) {
 
     switch (currentSortField) {
       case 'issue_date':
-        // Primary sort by issue_date
-        comparison = new Date(a.issue_date || 0) - new Date(b.issue_date || 0);
-
-        // If both have invalid/missing dates (epoch 0), fallback to volume number
-        if (comparison === 0 && (!a.issue_date || !b.issue_date)) {
-          const volumeA = getVolumeNumber(a);
-          const volumeB = getVolumeNumber(b);
-          comparison = volumeA - volumeB;
+        // An undated issue goes after every dated one in either direction,
+        // and undated issues are ordered by volume and issue number.
+        if (a.issue_date && b.issue_date) {
+          comparison = new Date(a.issue_date) - new Date(b.issue_date);
+        } else if (a.issue_date || b.issue_date) {
+          return a.issue_date ? -1 : 1;
+        } else {
+          comparison = compareVolumeAndIssue(a, b);
         }
         break;
       case 'title':
@@ -181,7 +255,7 @@ export function sortIssues(issues, currentSortField, sortAscending) {
         );
         break;
       case 'volume':
-        comparison = getVolumeNumber(a) - getVolumeNumber(b);
+        comparison = compareVolumeAndIssue(a, b);
         break;
       case 'added_date':
         comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
@@ -277,24 +351,22 @@ export function renderGroupedView(
     container.appendChild(specialSection);
   }
 
-  // Sort years based on current sort order
-  const sortedYearsData = [...yearsData].sort((a, b) => {
-    const yearA = String(a.year);
-    const yearB = String(b.year);
-    const comparison = yearA.localeCompare(yearB, undefined, { numeric: true });
-    return sortAscending ? comparison : -comparison;
+  // Sort sections by year or volume in the chosen direction, undated last
+  const sections = groupSections(yearsData).sort((a, b) => {
+    if (a.order === null) return 1;
+    if (b.order === null) return -1;
+    return sortAscending ? a.order - b.order : b.order - a.order;
   });
 
-  // Re-render regular year sections
-  sortedYearsData.forEach((yearData) => {
-    const sortedIssues = sortIssues([...yearData.issues], currentSortField, sortAscending);
+  sections.forEach((section) => {
+    const sortedIssues = sortIssues([...section.issues], currentSortField, sortAscending);
 
     const yearSection = document.createElement('div');
     yearSection.className = 'year-section';
 
     const yearTitle = document.createElement('h2');
     yearTitle.className = 'year-title';
-    yearTitle.textContent = yearData.year;
+    yearTitle.textContent = section.label;
     yearSection.appendChild(yearTitle);
 
     const issuesGrid = document.createElement('div');
@@ -382,7 +454,7 @@ export function createIssueCard(
   dateP.className = 'issue-date';
   dateP.textContent = issue.issue_date
     ? new Date(issue.issue_date).toLocaleDateString()
-    : 'Unknown Date';
+    : describeUndatedIssue(issue);
   infoDiv.appendChild(dateP);
 
   // Add special edition name if available

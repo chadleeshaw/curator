@@ -207,6 +207,34 @@ class TestPeriodicalPages:
         assert specials[0]["derived_metadata"]["special_edition_name"] == "Holiday"
         assert holiday_id not in _issue_ids(years, [])
 
+    @pytest.mark.parametrize("by", ["id", "title"])
+    def test_undated_issues_have_no_date_and_group_last(self, test_client, test_db, by):
+        """The 1900 sentinel is not shown as a date, and its group sorts after every year."""
+        session = _session(test_db)
+        _add_user(session)
+        dated = _add_periodical(session, issue_date=datetime(2024, 6, 1, tzinfo=UTC))
+        undated = _add_periodical(
+            session,
+            issue_date=datetime(1900, 1, 1, tzinfo=UTC),
+            file_path="/library/wired-vol-3.pdf",
+            derived_metadata={"volume": {"value": 3}},
+        )
+        session.commit()
+        dated_id, undated_id = dated.id, undated.id
+        session.close()
+
+        if by == "id":
+            response = test_client.get("/periodical", params={"id": dated_id})
+        else:
+            response = test_client.get("/periodicals/Wired")
+
+        assert response.status_code == 200
+        years = _data_attr(response.text, "years")
+        assert [year["year"] for year in years] == [2024, "Undated"]
+        assert years[1]["issues"][0]["id"] == undated_id
+        assert years[1]["issues"][0]["issue_date"] is None
+        assert years[0]["issues"][0]["issue_date"] == "2024-06-01"
+
     def test_periodical_by_id_uses_tracking_title(self, test_client, test_db):
         session = _session(test_db)
         _add_user(session)

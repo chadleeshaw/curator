@@ -5,11 +5,12 @@ HTML page serving routes
 import json
 import logging
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
+from core.constants.date import UNKNOWN_ISSUE_DATE_YEAR
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import is_special_edition
@@ -21,6 +22,29 @@ logger = logging.getLogger(__name__)
 
 # Global state (injected from main app)
 _session_factory = None
+
+
+# Group key for issues with no detected date (stored with the 1900 sentinel).
+UNDATED = "Undated"
+
+
+def _is_undated(p: Periodical) -> bool:
+    return p.issue_date is None or p.issue_date.year == UNKNOWN_ISSUE_DATE_YEAR
+
+
+def _issue_date_iso(p: Periodical) -> Optional[str]:
+    """The issue date for the page, or None for the 1900 sentinel."""
+    return None if _is_undated(p) else p.issue_date.date().isoformat()
+
+
+def _issue_year(p: Periodical) -> Union[int, str]:
+    return UNDATED if _is_undated(p) else p.issue_date.year
+
+
+def _sorted_years(periodicals_by_year: dict) -> list:
+    """Newest year first, with the undated group last."""
+    years = sorted((year for year in periodicals_by_year if year != UNDATED), reverse=True)
+    return years + [UNDATED] if UNDATED in periodicals_by_year else years
 
 
 def set_dependencies(session_factory: Callable) -> None:
@@ -117,7 +141,7 @@ async def view_periodical_by_id(id: int = Query(...)):
             periodical_data = {
                 "id": p.id,
                 "title": p.title,
-                "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                "issue_date": _issue_date_iso(p),
                 "cover_path": p.cover_path,
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
@@ -156,11 +180,11 @@ async def view_periodical_by_id(id: int = Query(...)):
             if is_special:
                 special_editions.append(periodical_data)
             else:
-                year = p.issue_date.year if p.issue_date else "Unknown"
+                year = _issue_year(p)
                 periodicals_by_year[year].append(periodical_data)
 
         # Sort years in descending order
-        sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
+        sorted_years = _sorted_years(periodicals_by_year)
 
         return display_title, sorted_years, periodicals_by_year, special_editions
 
@@ -282,7 +306,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
             periodical_data = {
                 "id": p.id,
                 "title": p.title,
-                "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                "issue_date": _issue_date_iso(p),
                 "cover_path": p.cover_path,
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
@@ -365,11 +389,11 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
             if is_special:
                 special_editions.append(periodical_data)
             else:
-                year = p.issue_date.year if p.issue_date else "Unknown"
+                year = _issue_year(p)
                 periodicals_by_year[year].append(periodical_data)
 
         # Sort years in descending order
-        sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
+        sorted_years = _sorted_years(periodicals_by_year)
 
         return (
             display_title,
