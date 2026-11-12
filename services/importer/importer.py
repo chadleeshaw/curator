@@ -54,13 +54,16 @@ logger = logging.getLogger(__name__)
 def _unusable_tracking_title(title: str) -> bool:
     """A leftover issue number or the word Magazine is not a magazine name.
 
-    A 4-digit name such as 2600, and a short number followed by a plus, stay.
+    A 4-digit name such as 2600, a short number followed by a plus, and a
+    numbered magazine such as 17 Magazine, stay. "12 North Title" does not.
     """
     cleaned = (title or "").strip()
     if re.fullmatch(r"mag(?:azine)?", cleaned, flags=re.IGNORECASE):
         return True
     if re.fullmatch(r"\d{1,3}", cleaned):
         return True
+    if re.fullmatch(r"\d{1,3}\s+mag(?:azine)?\.?", cleaned, flags=re.IGNORECASE):
+        return False
     return bool(re.match(r"^\d{1,3}\s", cleaned))
 
 

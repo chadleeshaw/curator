@@ -49,6 +49,13 @@ def test_the_word_magazine_alone_is_not_a_tracking_title():
         session.add.assert_not_called()
 
 
+def test_a_numbered_magazine_name_is_a_tracking_title():
+    for title in ("17 Magazine", "137 Magazine"):
+        _periodical, session = _create(title)
+
+        assert session.add.call_args[0][0].title == title
+
+
 def test_a_four_digit_name_and_a_plus_title_are_tracking_titles():
     for title in ("2600", "137+", "North Title", "3D World"):
         _periodical, session = _create(title)

@@ -17,6 +17,7 @@ from models.database import (
     DownloadSubmission,
     PeriodicalTracking,
 )
+from services.download.search_service import _result_has_requested_language
 from services.download_manager import DownloadManager
 
 JANUARY = datetime(2024, 1, 15, tzinfo=timezone.utc)
@@ -197,6 +198,28 @@ class TestSearchPeriodicalIssues:
         assert results[0]["url"] == "http://example.com/fr.nzb"
         assert results[0]["raw_metadata"]["date_precision"] == "month"
 
+    def test_a_country_name_does_not_pass_the_language_filter(self, session):
+        """France, Japan, and Holland are countries. French, 日本語, and Nederlands are languages."""
+        cases = (
+            ("French", "France", "French"),
+            ("Japanese", "Japan", "日本語"),
+            ("Dutch", "Holland", "Nederlands"),
+        )
+        for language, country, word in cases:
+            kept = f"Gardening World January 2024 {word}"
+            dropped = f"Gardening World January 2024 {country}"
+            provider = _Provider(
+                results=[
+                    _hit(dropped, "http://example.com/country.nzb", JANUARY),
+                    _hit(kept, "http://example.com/language.nzb", JANUARY),
+                ]
+            )
+            manager = _manager(providers=[provider])
+
+            results = manager.search_periodical_issues(f"Gardening World - {language}", session)
+
+            assert [item["original_title"] for item in results] == [kept]
+
     def test_a_provider_error_leaves_the_other_provider_results(self, session):
         broken = _Provider(error=RuntimeError("indexer down"), name="Broken")
         healthy = _Provider(
@@ -228,6 +251,35 @@ class TestSearchPeriodicalIssues:
         assert len(results) == 1
         assert results[0]["original_title"].endswith(".exe")
         assert results[0]["title"] == "Gardening World"
+
+
+def test_language_filter_matches_language_names_not_country_names():
+    rejected = (
+        ("French", "France"),
+        ("German", "Deutschland"),
+        ("Spanish", "España"),
+        ("Italian", "Italia"),
+        ("Dutch", "Holland"),
+        ("Polish", "Polska"),
+        ("Japanese", "Japan"),
+        ("Chinese", "China"),
+        ("Korean", "Korea"),
+    )
+    accepted = (
+        ("French", "French"),
+        ("French", "Français"),
+        ("French", "Francais"),
+        ("Japanese", "Japanese"),
+        ("Japanese", "日本語"),
+        ("Dutch", "Dutch"),
+        ("Dutch", "Nederlands"),
+    )
+    for language, word in rejected:
+        title = f"Gardening World January 2024 {word}"
+        assert _result_has_requested_language("English", title, language) is False
+    for language, word in accepted:
+        title = f"Gardening World January 2024 {word}"
+        assert _result_has_requested_language("English", title, language) is True
 
 
 class TestDownloadAllPeriodicalIssues:

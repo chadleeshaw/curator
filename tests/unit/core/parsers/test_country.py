@@ -196,6 +196,9 @@ class TestCountryDetectionIntegration:
         assert detect_country("National Geographic Australia March 2024.pdf") is None
         assert detect_country("North Title Sweden January 2024") is None
         assert detect_country("North Title Sweden Edition") == "SE"
+        assert detect_country("North Title Nederland Edition") == "NL"
+        assert detect_country("North Title Nederland") is None
+        assert detect_country("North Title Netherlands Edition") == "NL"
         assert detect_country("North Title [SE]") == "SE"
 
     def test_detect_from_search_results(self):

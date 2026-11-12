@@ -64,17 +64,23 @@ _NOT_A_NAME_WORD = {
 }
 _NAME_WORD = re.compile(r"^[A-Za-z][A-Za-z'’.-]*$")
 # A real site suffix. A magazine token such as "Title" is not one.
-_SITE_TLD = (
-    r"(?:info|biz|xyz|com|net|org|io|me|tv|cc|ws|to|us|fr|es|it|se|no|dk|pl|cz|be|at|ch|"
-    r"au|nz|ca|jp|kr|cn|uk|de|nl|ru|eu|co)"
-)
-_SITE_HOST = rf"(?:www\.)?[-a-z0-9-]{{1,256}}\.{_SITE_TLD}(?:\.(?:uk|au|nz|br|za|jp|kr|cn))?"
+# A one-label country suffix such as Name.uk is a magazine token too.
+# www.name.uk and name.example.uk are web addresses. Generic suffixes
+# such as example.com and name.co.uk still are.
+_LABEL = r"[-a-z0-9-]{1,256}"
+_GENERIC_TLD = r"info|biz|xyz|com|net|org|io|me|tv|cc|ws|to|co"
+_COUNTRY_TLD = r"fr|es|it|se|no|dk|pl|cz|be|at|ch|au|nz|ca|jp|kr|cn|uk|de|nl|ru|eu|us"
+_SECOND_LEVEL = r"uk|au|nz|br|za|jp|kr|cn"
+_SITE_TLD = rf"(?:{_GENERIC_TLD}|{_COUNTRY_TLD})"
+_GENERIC_HOST = rf"(?:www\.)?{_LABEL}\.(?:{_GENERIC_TLD})(?:\.(?:{_SECOND_LEVEL}))?"
+_COUNTRY_HOST = rf"(?:www\.{_LABEL}|{_LABEL}\.{_LABEL})\.(?:{_COUNTRY_TLD})"
+_SITE_HOST = rf"(?:{_GENERIC_HOST}|{_COUNTRY_HOST})"
 
 
 def _strip_file_extension(title: str) -> str:
-    """Drop a trailing file suffix. A site suffix such as .com stays."""
+    """Drop a trailing file suffix. A year such as .2024 and a site suffix such as .com stay."""
     match = re.search(r"\.([A-Za-z0-9]{2,4})$", title)
-    if match and not re.fullmatch(_SITE_TLD, match.group(1), flags=re.IGNORECASE):
+    if match and not match.group(1).isdigit() and not re.fullmatch(_SITE_TLD, match.group(1), flags=re.IGNORECASE):
         return title[: match.start()]
     return title
 
@@ -88,6 +94,11 @@ def _restore_region_case(title: str) -> str:
     """Keep UK and US uppercase after title case."""
     title = re.sub(r"\bUk\b", "UK", title)
     return re.sub(r"\bUs\b", "US", title)
+
+
+def _strip_trailing_separators(value: str) -> str:
+    """Drop a dash or colon left between a magazine name and a subtitle."""
+    return re.sub(r"[\s\-–—:]+$", "", value).strip()
 
 
 def _case_known_title(title: str) -> str:
@@ -111,6 +122,11 @@ def _case_known_title(title: str) -> str:
 def _is_plus_title(part: str) -> bool:
     """A magazine whose name is a short number and a plus, not an issue number."""
     return bool(re.fullmatch(r"\d{1,3}\+", part))
+
+
+def _is_numbered_magazine(title: str) -> bool:
+    """17 Magazine is the name. 12 North Title is an issue number plus a title."""
+    return bool(re.fullmatch(r"\d{1,3}\s+mag(?:azine)?\.?", (title or "").strip(), flags=re.IGNORECASE))
 
 
 def _is_issue_token(part: str) -> bool:
@@ -147,7 +163,7 @@ def strip_issue_number_and_name(title: str) -> str:
     "137 - North Title - Alex Morgan" is the magazine "North Title". A credit is
     removed only when a magazine name remains. A 4-digit name such as "2600", and
     a name that is a short number followed by a plus, are kept. 137Plus and
-    137 Plus collapse to that plus form.
+    137 Plus collapse to that plus form. "17 Magazine" keeps its number.
     """
     if not title:
         return title
@@ -168,6 +184,9 @@ def strip_issue_number_and_name(title: str) -> str:
         parts = parts[1:]
 
     title = " - ".join(parts)
+    if _is_numbered_magazine(title):
+        return title.strip()
+
     stripped = re.sub(r"^\d{1,3}\s*-\s+(?=[A-Za-z])", "", title)
     stripped = re.sub(r"^\d{1,3}\s+(?=[A-Za-z])", "", stripped).strip()
     if stripped and re.search(r"[A-Za-z]", stripped):
@@ -296,7 +315,7 @@ class TitleMatcher:
         )
 
         # Remove website prefixes: [www.site.com] or www.site.com -
-        # The suffix has to be a real site suffix. "North.Title-Jan" is a magazine name.
+        # The suffix has to be a real site suffix. "North.Title-Jan" and "Name.uk-Jan" are magazine names.
         title = re.sub(
             rf"^(?:\[\s*)?{_SITE_HOST}\b(?:\s*\]|\s+[-\s]*|-(?=[A-Za-z]))",
             "",
@@ -422,7 +441,8 @@ class TitleMatcher:
             flags=re.IGNORECASE,
         )
         title = strip_issue_number_and_name(title)
-        title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
+        if not _is_numbered_magazine(title):
+            title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
         # Remove standalone format indicators (E Book, eBook, Digital, PDF, TruePDF, etc.)
         # TruePDF indicates a digitally created (text-based) PDF vs a scanned one
@@ -558,7 +578,7 @@ class TitleMatcher:
         match = re.search(special_pattern, title, re.IGNORECASE)
 
         if match:
-            base_title = match.group(1).strip()
+            base_title = _strip_trailing_separators(match.group(1))
             special_name = match.group(2).strip()
             return (base_title, True, special_name)
 
@@ -567,7 +587,7 @@ class TitleMatcher:
         match = re.search(special_pattern_no_name, title, re.IGNORECASE)
 
         if match:
-            base_title = match.group(1).strip()
+            base_title = _strip_trailing_separators(match.group(1))
             return (base_title, True, "Special Edition")
 
         # Pattern 2: Keyword-based detection using SPECIAL_EDITION_KEYWORDS
@@ -578,9 +598,7 @@ class TitleMatcher:
                 # Found a keyword — extract it as the special edition indicator
                 # Try to split at the keyword position to get a base title
                 keyword_pos = title_lower.find(keyword)
-                base_part = title[:keyword_pos].strip()
-                # Strip separators (dash, colon) from the end of the base part
-                base_part = re.sub(r"[\s\-–—:]+$", "", base_part)
+                base_part = _strip_trailing_separators(title[:keyword_pos])
 
                 if base_part:
                     # Use the keyword match and everything after as the special name

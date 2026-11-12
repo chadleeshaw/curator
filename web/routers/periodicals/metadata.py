@@ -113,7 +113,7 @@ async def update_periodical(
 
         has_tracking = periodical.tracking_id is not None
 
-        if "language" in updates and updates["language"]:
+        if "language" in updates and isinstance(updates["language"], str):
             if has_tracking:
                 from models.database import Periodical, PeriodicalTracking
 

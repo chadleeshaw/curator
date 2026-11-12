@@ -992,6 +992,151 @@ class TestPeriodicalFileRoutes:
         assert {row.language for row in session.query(Periodical).all()} == {"English"}
         session.close()
 
+    def test_clearing_language_updates_tracking_and_every_issue(self, test_client, test_db, monkeypatch):
+        """An empty language is a real value. It applies to the tracking and every issue."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.metadata.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        tracking_id = _insert_tracking(test_db, olid="OL-NORTH", title="North Title", language="Spanish")
+        first_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        second_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/138.pdf",
+        )
+
+        response = test_client.put(f"/api/periodicals/{first_id}", json={"language": ""})
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        assert session.query(PeriodicalTracking).one().language == ""
+        languages = {row.id: row.language for row in session.query(Periodical).all()}
+        assert languages == {first_id: "", second_id: ""}
+        session.close()
+
+    def test_clearing_language_on_an_untracked_issue_leaves_other_rows(self, test_client, test_db, monkeypatch):
+        monkeypatch.setattr(
+            "web.routers.periodicals.metadata.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        tracking_id = _insert_tracking(test_db, olid="OL-NORTH", title="North Title", language="Spanish")
+        tracked_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        loose_id = _insert_periodical(
+            test_db,
+            title="Loose Title",
+            language="Spanish",
+            file_path="/library/loose.pdf",
+        )
+
+        response = test_client.put(f"/api/periodicals/{loose_id}", json={"language": ""})
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        assert session.query(PeriodicalTracking).one().language == "Spanish"
+        languages = {row.id: row.language for row in session.query(Periodical).all()}
+        assert languages[loose_id] == ""
+        assert languages[tracked_id] == "Spanish"
+        session.close()
+
+    def test_last_issue_moved_onto_an_unstacked_tracking_takes_its_stack(self, test_client, test_db, monkeypatch):
+        """The source stack membership follows the last issue when the target has none."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+
+        source_id = _insert_tracking(test_db, olid="OL-SOURCE", title="North Title", language="English")
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title", language="English")
+        periodical_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="English",
+            tracking_id=source_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        session = _session(test_db)
+        stack = Stack(name="Shelf", slug="shelf", user_id=1)
+        session.add(stack)
+        session.commit()
+        session.add(StackMembership(stack_id=stack.id, periodical_tracking_id=source_id))
+        session.commit()
+        stack_id = stack.id
+        session.close()
+
+        response = test_client.post(
+            f"/api/periodicals/{periodical_id}/move-to-tracking",
+            params={"target_tracking_id": target_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["tracking_removed"] is True
+        session = _session(test_db)
+        membership = session.query(StackMembership).one()
+        assert membership.stack_id == stack_id
+        assert membership.periodical_tracking_id == target_id
+        assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one_or_none() is None
+        session.close()
+
+    def test_last_issue_moved_onto_a_stacked_tracking_drops_the_source_stack(self, test_client, test_db, monkeypatch):
+        """A target that already belongs to a stack does not take a second membership."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+
+        source_id = _insert_tracking(test_db, olid="OL-SOURCE", title="North Title", language="English")
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title", language="English")
+        periodical_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="English",
+            tracking_id=source_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        session = _session(test_db)
+        source_stack = Stack(name="Source Shelf", slug="source-shelf", user_id=1)
+        target_stack = Stack(name="Target Shelf", slug="target-shelf", user_id=1)
+        session.add_all([source_stack, target_stack])
+        session.commit()
+        source_membership = StackMembership(stack_id=source_stack.id, periodical_tracking_id=source_id)
+        target_membership = StackMembership(stack_id=target_stack.id, periodical_tracking_id=target_id)
+        session.add_all([source_membership, target_membership])
+        session.commit()
+        source_membership_id = source_membership.id
+        target_stack_id = target_stack.id
+        session.close()
+
+        response = test_client.post(
+            f"/api/periodicals/{periodical_id}/move-to-tracking",
+            params={"target_tracking_id": target_id},
+        )
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        memberships = session.query(StackMembership).all()
+        assert len(memberships) == 1
+        assert memberships[0].id != source_membership_id
+        assert memberships[0].stack_id == target_stack_id
+        assert memberships[0].periodical_tracking_id == target_id
+        session.close()
+
 
 def _reorganize_without_moving_files(
     periodical,

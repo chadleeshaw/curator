@@ -290,6 +290,10 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     if re.search(r"\bSouth[\s\.]Africa\s+edition\b", text, re.IGNORECASE):
         return "ZA"
 
+    # Nederland is the Dutch name. It counts only as an edition phrase.
+    if re.search(r"\bNederland\s+edition\b", text, re.IGNORECASE):
+        return "NL"
+
     # Common English words that look like country codes but should be ignored
     common_words = {
         "IS",

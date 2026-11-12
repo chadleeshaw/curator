@@ -20,6 +20,22 @@ from core.utils.result_filter import filter_result
 
 logger = logging.getLogger(__name__)
 
+# Country names sit in LANGUAGE_INDICATORS for edition tags. A search for
+# French must not keep a title that only says France.
+_COUNTRY_NAMES = frozenset(
+    {
+        "france",
+        "deutschland",
+        "españa",
+        "italia",
+        "holland",
+        "polska",
+        "japan",
+        "china",
+        "korea",
+    }
+)
+
 
 def _result_has_requested_language(parsed_language: Optional[str], title: str, language_filter: str) -> bool:
     """Keep a search hit for the language the query asked for.
@@ -27,12 +43,18 @@ def _result_has_requested_language(parsed_language: Optional[str], title: str, l
     A tagged language is already on the parsed result. An indexer title also
     names the language as a bare word, such as ``January 2024 French``. That
     word is a search hint. It does not set the language of an archived release.
+    A country name such as France, Japan, or Holland is not that hint.
     """
     if parsed_language and parsed_language.lower() == language_filter.lower():
         return True
 
     indicators = LANGUAGE_INDICATORS.get(language_filter, ())
-    return any(len(word) > 2 and re.search(rf"\b{re.escape(word)}\b", title, re.IGNORECASE) for word in indicators)
+    return any(
+        len(word) > 2
+        and word.casefold() not in _COUNTRY_NAMES
+        and re.search(rf"\b{re.escape(word)}\b", title, re.IGNORECASE)
+        for word in indicators
+    )
 
 
 class SearchService:
