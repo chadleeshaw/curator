@@ -40,6 +40,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     tesseract-ocr-jpn \
     tesseract-ocr-kor \
     unrar-free \
+    passwd \
+    util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder (system-wide, so the app can run as a non-root user)
@@ -50,7 +52,9 @@ ARG BUILD_VERSION=unknown
 ARG BUILD_HASH=unknown
 
 # Set environment variables
-ENV HOME=/root
+ENV HOME=/tmp
+ENV PUID=1000
+ENV PGID=1000
 ENV BUILD_VERSION=${BUILD_VERSION}
 ENV BUILD_HASH=${BUILD_HASH}
 
