@@ -11,6 +11,7 @@ Current migrations:
 
 import logging
 
+from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session
 
 from core.utils.metadata_builder import build_derived_metadata
@@ -117,8 +118,10 @@ def migrate_metadata_structure(session: Session) -> int:
         This migration is idempotent - safe to run multiple times.
         Records with parsed_metadata already set are skipped.
     """
-    # Check if any periodicals need migration
-    unmigrated_count = session.query(Periodical).filter(Periodical.parsed_metadata.is_(None)).count()
+    # SQL NULL and JSON null both mean the new columns were never written.
+    # The ORM stores Python None as the text 'null', which IS NULL does not match.
+    needs_migration = or_(Periodical.parsed_metadata.is_(None), cast(Periodical.parsed_metadata, String) == "null")
+    unmigrated_count = session.query(Periodical).filter(needs_migration).count()
 
     if unmigrated_count == 0:
         logger.debug("No periodicals need metadata structure migration")
@@ -129,23 +132,15 @@ def migrate_metadata_structure(session: Session) -> int:
     migrated_count = 0
     batch_size = 100
 
-    # Process in batches
-    for offset in range(0, unmigrated_count, batch_size):
-        periodicals = (
-            session.query(Periodical)
-            .filter(Periodical.parsed_metadata.is_(None))
-            .offset(offset)
-            .limit(batch_size)
-            .all()
-        )
-
+    # Re-query each batch. Offsetting a shrinking filter would skip rows.
+    while True:
+        periodicals = session.query(Periodical).filter(needs_migration).limit(batch_size).all()
+        if not periodicals:
+            break
         for periodical in periodicals:
             if _migrate_single_periodical(periodical):
                 migrated_count += 1
-
-        # Commit batch
         session.commit()
-        logger.debug(f"Migrated {offset + len(periodicals)}/{unmigrated_count} periodicals...")
 
     logger.info(f"✓ Migrated metadata structure for {migrated_count} periodical(s)")
     return migrated_count
