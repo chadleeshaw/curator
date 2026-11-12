@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Path setup handled by conftest.py
 
-from core.parsers import TitleMatcher
+from core.parsers import Parser, TitleMatcher
 from models.database import Base, Periodical, PeriodicalTracking
 from services import FileImporter
 
@@ -319,6 +319,63 @@ class TestTitleNormalization:
                 "2600 Hacker Quarterly",
                 "2600 Hacker Quarterly",
             ),  # No issue numbers to remove
+            ("137 North Title - Alex Morgan", "North Title"),
+            ("137 - North Title - Jan2024", "North Title"),
+            ("137+ Magazine", "137+"),
+            ("137+ Magazine - Jan2024", "137+"),
+            ("137+ - Alex Morgan - Jan2024", "137+"),
+            ("137+", "137+"),
+            ("137Plus", "137+"),
+            ("137 Plus", "137+"),
+            ("137 PLUS Magazine", "137+"),
+            ("137Plus - Alex Morgan - Jan2024", "137+"),
+            ("137 Plus Magazine - Jan2024", "137+"),
+            ("137.Plus.pdf", "137+"),
+            ("137_Plus Magazine", "137+"),
+            ("North Title - Alex Morgan - 12", "North Title"),
+            ("North Title - Name12", "North Title"),
+            ("Magazine - Alex Morgan - Jan2024", "Magazine"),
+            ("137 Magazine", "137 Magazine"),
+            ("17 Magazine", "17 Magazine"),
+            ("17 Magazine January 2024", "17 Magazine"),
+            ("17 Magazine UK", "17 Magazine UK"),
+            ("PC Gamer - UK", "PC Gamer - UK"),
+            ("PC Gamer UK", "PC Gamer UK"),
+            ("pcgamer uk", "PC Gamer UK"),
+            ("PC World - US", "PC World - US"),
+            ("National Geographic - Traveler", "National Geographic - Traveler"),
+            ("2600 Magazine", "2600"),
+            ("2600 Magazine January 2024", "2600"),
+            ("Name.uk-January.2024", "Name UK"),
+            ("Name.uk-January.2024.pdf", "Name UK"),
+            ("Name.uk", "Name UK"),
+            ("magazinelib.ru - North Title - March 2024.pdf", "North Title"),
+            ("[site.club] North Title March 2024.pdf", "North Title"),
+            ("20 Minutes - 12 Janvier 2024.pdf", "20 Minutes - 12 Janvier 2024"),
+            ("7 Days January 2024.pdf", "7 Days"),
+            ("Linux Format - Ultimate Guide.pdf", "Linux Format - Ultimate Guide"),
+            ("North Title - History Collection.pdf", "North Title - History Collection"),
+            # A bare language or country word does not set the language, so it stays.
+            ("Wired Italia December 2024.pdf", "Wired Italia"),
+            ("Vogue France - January 2024.pdf", "Vogue France"),
+            ("Chip German January 2024.pdf", "Chip German"),
+            ("Chip.German.January.2024.pdf", "Chip"),
+            ("Chip [DE] January 2024.pdf", "Chip"),
+            ("www.name.uk-January.2024.pdf", ""),
+            ("name.example.uk-January.2024.pdf", ""),
+            ("example.com.au - North Title January 2024", "North Title"),
+            ("North Title name.co.uk", "North Title"),
+            ("North.Title-Jan.2024.pdf", "North Title"),
+            ("North Title Special Edition", "North Title Special Edition"),
+            ("North.Title-January.2024.pdf", "North Title"),
+            ("North.Extra.Title-Jan.2024.pdf", "North Extra Title"),
+            ("137.North.Title-Jan.2024.pdf", "North Title"),
+            ("North.Title.pdf", "North Title"),
+            ("www.example.com - North Title - Jan 2024", "North Title"),
+            ("[www.example.com] North Title January 2024", "North Title"),
+            ("North Title www.example.com", "North Title"),
+            ("North Title www.example.com.pdf", "North Title"),
+            ("North Title example.com", "North Title"),
         ]
 
         for input_title, expected_output in test_cases:
@@ -376,6 +433,31 @@ class TestTitleNormalization:
             if "Special Edition" in input_title:
                 assert is_special, f"'{input_title}' should be detected as special edition"
                 assert special_name == "Special Edition"
+
+
+def test_numeric_filename_uses_folder_name(tmp_path):
+    """A file named with only its issue number takes the magazine folder."""
+    folder = tmp_path / "North Title"
+    folder.mkdir()
+    pdf_file = folder / "137.pdf"
+    pdf_file.write_text("test content")
+
+    parsed = Parser().parse_file(pdf_file)
+
+    assert parsed.base_title == "North Title"
+    assert parsed.title == "North Title"
+
+
+def test_four_digit_title_is_not_treated_as_an_issue_number(tmp_path):
+    """2600 is a magazine name, not an issue number to replace with the folder."""
+    folder = tmp_path / "Shelf"
+    folder.mkdir()
+    pdf_file = folder / "2600 Magazine January 2024.pdf"
+    pdf_file.write_text("test content")
+
+    parsed = Parser().parse_file(pdf_file)
+
+    assert "2600" in parsed.base_title
 
 
 if __name__ == "__main__":

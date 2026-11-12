@@ -43,6 +43,13 @@ class TestExtractBaseTitle:
         assert base == "Food & Wine"
         assert name == "Special Edition"
 
+    def test_special_edition_separator_is_not_part_of_the_base_title(self):
+        base, is_special, name = self.matcher.extract_base_title("North Title - Special Edition")
+        assert (base, is_special, name) == ("North Title", True, "Special Edition")
+
+        base, is_special, name = self.matcher.extract_base_title("Time - Special Edition Person Of The Year")
+        assert (base, is_special, name) == ("Time", True, "Person Of The Year")
+
     # ---- Pattern 2: Keyword-based detection ----
 
     def test_keyword_annual_edition(self):

@@ -16,13 +16,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models.database import Base, Periodical, PeriodicalTracking, Stack, StackMembership
+from models.database import (
+    Base,
+    DiscoveredIssue,
+    DownloadSubmission,
+    Periodical,
+    PeriodicalTracking,
+    Stack,
+    StackMembership,
+)
+from services.file_operations import FileReorganizationResult
 from web.routers import stacks
 from web.routers.auth import get_verify_token
 from web.routers.periodicals import _shared
 
 import web.routers.periodicals.crud  # noqa: F401
 import web.routers.periodicals.files  # noqa: F401
+import web.routers.periodicals.metadata  # noqa: F401
 
 
 @pytest.fixture
@@ -852,6 +862,343 @@ class TestPeriodicalFileRoutes:
         assert row.tracking_id is None
         assert row.title == "Orphan"
         session.close()
+
+    def test_move_copies_language_and_removes_empty_tracking(self, test_client, test_db, monkeypatch):
+        """The last issue takes the target language, and the empty tracking goes away."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+
+        source_id = _insert_tracking(test_db, olid="OL-SOURCE", title="North Title", language="Spanish")
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title", language="English")
+        periodical_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=source_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        session = _session(test_db)
+        session.add(
+            DownloadSubmission(
+                user_id=1,
+                tracking_id=source_id,
+                source_url="http://example.com/north-title",
+                result_title="North Title",
+                status=DownloadSubmission.StatusEnum.COMPLETED,
+            )
+        )
+        session.add(
+            DiscoveredIssue(
+                user_id=1,
+                tracking_id=source_id,
+                title="North Title",
+                normalized_title="north title",
+                fuzzy_match_group="north title",
+            )
+        )
+        session.commit()
+        session.close()
+
+        response = test_client.post(
+            f"/api/periodicals/{periodical_id}/move-to-tracking",
+            params={"target_tracking_id": target_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["tracking_removed"] is True
+        session = _session(test_db)
+        issue = session.query(Periodical).one()
+        assert issue.tracking_id == target_id
+        assert issue.language == "English"
+        assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one_or_none() is None
+        assert session.query(DownloadSubmission).one().tracking_id == target_id
+        assert session.query(DiscoveredIssue).one().tracking_id == target_id
+        session.close()
+
+    def test_move_keeps_tracking_while_another_issue_remains(self, test_client, test_db, monkeypatch):
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+
+        source_id = _insert_tracking(test_db, olid="OL-SOURCE", title="North Title", language="Spanish")
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title", language="English")
+        moving_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=source_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        staying_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=source_id,
+            file_path="/library/North Title/138.pdf",
+        )
+
+        response = test_client.post(
+            f"/api/periodicals/{moving_id}/move-to-tracking",
+            params={"target_tracking_id": target_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["tracking_removed"] is False
+        session = _session(test_db)
+        staying = session.query(Periodical).filter(Periodical.id == staying_id).one()
+        assert staying.tracking_id == source_id
+        assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one() is not None
+        session.close()
+
+    def test_move_keeps_a_configured_or_downloading_tracking(self, test_client, test_db, monkeypatch):
+        """A tracking with user settings or a download in progress is not removed."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title UK", language="English")
+
+        def start_download(tracking_id):
+            session = _session(test_db)
+            session.add(
+                DownloadSubmission(
+                    user_id=1,
+                    tracking_id=tracking_id,
+                    source_url="http://example.com/north-title",
+                    result_title="North Title",
+                )
+            )
+            session.commit()
+            session.close()
+
+        configured_id = _insert_tracking(test_db, olid="OL-CONFIGURED", title="North Title", search_aliases="North")
+        downloading_id = _insert_tracking(test_db, olid="OL-DOWNLOADING", title="North Title")
+        start_download(downloading_id)
+
+        for index, source_id in enumerate((configured_id, downloading_id)):
+            periodical_id = _insert_periodical(
+                test_db,
+                title="North Title",
+                language="English",
+                tracking_id=source_id,
+                file_path=f"/library/North Title/{index}.pdf",
+            )
+
+            response = test_client.post(
+                f"/api/periodicals/{periodical_id}/move-to-tracking",
+                params={"target_tracking_id": target_id},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["tracking_removed"] is False
+            session = _session(test_db)
+            assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one_or_none()
+            session.close()
+
+    def test_language_save_updates_tracking_and_every_issue(self, test_client, test_db, monkeypatch):
+        """Choosing English on one issue clears a wrong language for the whole magazine."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.metadata.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        tracking_id = _insert_tracking(test_db, olid="OL-NORTH", title="North Title", language="Spanish")
+        first_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        second_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/138.pdf",
+        )
+
+        response = test_client.put(f"/api/periodicals/{first_id}", json={"language": "English"})
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        assert session.query(PeriodicalTracking).one().language == "English"
+        languages = {row.id: row.language for row in session.query(Periodical).all()}
+        assert languages == {first_id: "English", second_id: "English"}
+        session.close()
+
+        year_only = test_client.put(f"/api/periodicals/{first_id}", json={"year": 2024})
+        assert year_only.status_code == 200
+        session = _session(test_db)
+        assert session.query(PeriodicalTracking).one().language == "English"
+        assert {row.language for row in session.query(Periodical).all()} == {"English"}
+        session.close()
+
+    def test_clearing_language_updates_tracking_and_every_issue(self, test_client, test_db, monkeypatch):
+        """An empty language is a real value. It applies to the tracking and every issue."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.metadata.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        tracking_id = _insert_tracking(test_db, olid="OL-NORTH", title="North Title", language="Spanish")
+        first_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        second_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/138.pdf",
+        )
+
+        response = test_client.put(f"/api/periodicals/{first_id}", json={"language": ""})
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        assert session.query(PeriodicalTracking).one().language == ""
+        languages = {row.id: row.language for row in session.query(Periodical).all()}
+        assert languages == {first_id: "", second_id: ""}
+        session.close()
+
+    def test_clearing_language_on_an_untracked_issue_leaves_other_rows(self, test_client, test_db, monkeypatch):
+        monkeypatch.setattr(
+            "web.routers.periodicals.metadata.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        tracking_id = _insert_tracking(test_db, olid="OL-NORTH", title="North Title", language="Spanish")
+        tracked_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="Spanish",
+            tracking_id=tracking_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        loose_id = _insert_periodical(
+            test_db,
+            title="Loose Title",
+            language="Spanish",
+            file_path="/library/loose.pdf",
+        )
+
+        response = test_client.put(f"/api/periodicals/{loose_id}", json={"language": ""})
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        assert session.query(PeriodicalTracking).one().language == "Spanish"
+        languages = {row.id: row.language for row in session.query(Periodical).all()}
+        assert languages[loose_id] == ""
+        assert languages[tracked_id] == "Spanish"
+        session.close()
+
+    def test_last_issue_moved_onto_an_unstacked_tracking_takes_its_stack(self, test_client, test_db, monkeypatch):
+        """The source stack membership follows the last issue when the target has none."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+
+        source_id = _insert_tracking(test_db, olid="OL-SOURCE", title="North Title", language="English")
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title", language="English")
+        periodical_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="English",
+            tracking_id=source_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        session = _session(test_db)
+        stack = Stack(name="Shelf", slug="shelf", user_id=1)
+        session.add(stack)
+        session.commit()
+        session.add(StackMembership(stack_id=stack.id, periodical_tracking_id=source_id))
+        session.commit()
+        stack_id = stack.id
+        session.close()
+
+        response = test_client.post(
+            f"/api/periodicals/{periodical_id}/move-to-tracking",
+            params={"target_tracking_id": target_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["tracking_removed"] is True
+        session = _session(test_db)
+        membership = session.query(StackMembership).one()
+        assert membership.stack_id == stack_id
+        assert membership.periodical_tracking_id == target_id
+        assert session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).one_or_none() is None
+        session.close()
+
+    def test_last_issue_moved_onto_a_stacked_tracking_drops_the_source_stack(self, test_client, test_db, monkeypatch):
+        """A target that already belongs to a stack does not take a second membership."""
+        monkeypatch.setattr(
+            "web.routers.periodicals.files.reorganize_periodical_files",
+            _reorganize_without_moving_files,
+        )
+        monkeypatch.setattr("web.routers.periodicals.files.cleanup_empty_directories", lambda *_args, **_kwargs: None)
+
+        source_id = _insert_tracking(test_db, olid="OL-SOURCE", title="North Title", language="English")
+        target_id = _insert_tracking(test_db, olid="OL-TARGET", title="North Title", language="English")
+        periodical_id = _insert_periodical(
+            test_db,
+            title="North Title",
+            language="English",
+            tracking_id=source_id,
+            file_path="/library/North Title/137.pdf",
+        )
+        session = _session(test_db)
+        source_stack = Stack(name="Source Shelf", slug="source-shelf", user_id=1)
+        target_stack = Stack(name="Target Shelf", slug="target-shelf", user_id=1)
+        session.add_all([source_stack, target_stack])
+        session.commit()
+        source_membership = StackMembership(stack_id=source_stack.id, periodical_tracking_id=source_id)
+        target_membership = StackMembership(stack_id=target_stack.id, periodical_tracking_id=target_id)
+        session.add_all([source_membership, target_membership])
+        session.commit()
+        source_membership_id = source_membership.id
+        target_stack_id = target_stack.id
+        session.close()
+
+        response = test_client.post(
+            f"/api/periodicals/{periodical_id}/move-to-tracking",
+            params={"target_tracking_id": target_id},
+        )
+
+        assert response.status_code == 200
+        session = _session(test_db)
+        memberships = session.query(StackMembership).all()
+        assert len(memberships) == 1
+        assert memberships[0].id != source_membership_id
+        assert memberships[0].stack_id == target_stack_id
+        assert memberships[0].periodical_tracking_id == target_id
+        session.close()
+
+
+def _reorganize_without_moving_files(
+    periodical,
+    new_title,
+    library_base_dir,
+    category_prefix="_",
+    should_update_database=True,
+):
+    """Skip the library filesystem. The move route still updates the row."""
+    return FileReorganizationResult(
+        success=True,
+        new_pdf_path=periodical.file_path,
+        new_cover_path=None,
+        files_moved=False,
+    )
 
 
 async def _render_must_not_run(*_args, **_kwargs):

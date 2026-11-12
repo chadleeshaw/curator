@@ -98,6 +98,70 @@ def test_sidecar_matching_country_language_accepts():
     assert result == usa_tracking
 
 
+def test_link_keeps_the_parsed_issue_language():
+    """Linking does not copy the tracking language onto the issue."""
+    importer = FileImporter(downloads_dir=Path("/tmp"), library_base_dir=Path("/tmp"))
+    periodical = MagicMock()
+    periodical.language = "English"
+    tracking = PeriodicalTracking(
+        id=7,
+        title="North Title",
+        country=None,
+        language="Spanish",
+        user_id=1,
+    )
+    session = MagicMock()
+
+    importer._link_or_create_tracking(
+        periodical=periodical,
+        target_tracking=tracking,
+        tracking_title="North Title",
+        parsed_language="English",
+        parsed_country=None,
+        category="Magazines",
+        is_special_edition=False,
+        special_name=None,
+        auto_track=True,
+        tracking_mode="all",
+        session=session,
+    )
+
+    assert periodical.language == "English"
+    assert tracking.language == "Spanish"
+
+
+def test_link_sets_tracking_language_when_the_record_has_none():
+    """A new tracking language comes from the issue only when the record has none."""
+    importer = FileImporter(downloads_dir=Path("/tmp"), library_base_dir=Path("/tmp"))
+    periodical = MagicMock()
+    periodical.language = "German"
+    tracking = PeriodicalTracking(
+        id=8,
+        title="North Title",
+        country=None,
+        language=None,
+        user_id=1,
+    )
+    session = MagicMock()
+
+    importer._link_or_create_tracking(
+        periodical=periodical,
+        target_tracking=tracking,
+        tracking_title="North Title",
+        parsed_language="German",
+        parsed_country="DE",
+        category="Magazines",
+        is_special_edition=False,
+        special_name=None,
+        auto_track=True,
+        tracking_mode="all",
+        session=session,
+    )
+
+    assert periodical.language == "German"
+    assert tracking.language == "German"
+
+
 def test_sidecar_no_country_on_tracking_accepts():
     """If tracking has no country set, don't reject based on country mismatch."""
     importer = FileImporter(downloads_dir=Path("/tmp"), library_base_dir=Path("/tmp"))

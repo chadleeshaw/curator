@@ -13,12 +13,28 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
+from core.constants.language import LANGUAGE_NAMES
 from core.interfaces import SearchProvider
 from core.parsers import LANGUAGE_INDICATORS, Parser, TitleMatcher
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from core.utils.result_filter import filter_result
 
 logger = logging.getLogger(__name__)
+
+
+def _result_has_requested_language(parsed_language: Optional[str], title: str, language_filter: str) -> bool:
+    """Keep a search hit for the language the query asked for.
+
+    A tagged language is already on the parsed result. An indexer title also
+    names the language as a bare word, such as ``January 2024 French``. That
+    word is a search hint. It does not set the language of an archived release.
+    A country name such as France, Japan, or Holland is not that hint.
+    """
+    if parsed_language and parsed_language.lower() == language_filter.lower():
+        return True
+
+    names = LANGUAGE_NAMES.get(language_filter, ())
+    return any(len(word) > 2 and re.search(rf"\b{re.escape(word)}\b", title, re.IGNORECASE) for word in names)
 
 
 class SearchService:
@@ -148,7 +164,9 @@ class SearchService:
                         ):
                             continue
 
-                        if language_filter and parsed.language != language_filter:
+                        if language_filter and not _result_has_requested_language(
+                            parsed.language, result.title, language_filter
+                        ):
                             logger.debug(
                                 f"Skipping result with language '{parsed.language}' "
                                 f"(filter: {language_filter}): {result.title}"

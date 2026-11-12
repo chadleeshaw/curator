@@ -529,6 +529,8 @@ async def move_issue_to_tracking(
         category_prefix = _shared._category_prefix
 
         periodical.tracking_id = target_tracking_id
+        if target_tracking.language:
+            periodical.language = target_tracking.language
 
         is_special = is_periodical_special_edition(periodical)
 
@@ -553,6 +555,10 @@ async def move_issue_to_tracking(
                 logger.error(f"Error reorganizing periodical files: {result.error}")
                 periodical.title = target_tracking.title
 
+        tracking_removed = False
+        if old_tracking_id and old_tracking_id != target_tracking_id:
+            tracking_removed = _shared.retire_empty_source_tracking(db, old_tracking_id, target_tracking_id)
+
         db.commit()
 
         if old_dir_to_cleanup and old_dir_to_cleanup.exists():
@@ -568,6 +574,7 @@ async def move_issue_to_tracking(
             old_tracking_id=old_tracking_id,
             new_tracking_id=target_tracking_id,
             files_reorganized=files_reorganized,
+            tracking_removed=tracking_removed,
         )
 
     return await with_db_session(_shared._session_factory, operation)

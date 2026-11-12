@@ -214,6 +214,86 @@ def test_regional_editions_with_title_differences_dont_match():
     assert result is None or not result.is_match
 
 
+def test_language_mismatch_rejects_an_exact_title():
+    """An exact title in another language does not join that tracking record."""
+    matcher = TrackingMatcher()
+    tracking_records = [
+        MockTracking(1, "North Title", "Spanish", None, CATEGORY_MAGAZINE),
+    ]
+
+    result = matcher.find_best_match(
+        parsed_title="North Title",
+        tracking_records=tracking_records,
+        parsed_language="English",
+        parsed_country=None,
+        parsed_category=CATEGORY_MAGAZINE,
+    )
+    score, breakdown = matcher.match_to_tracking(
+        parsed_title="North Title",
+        tracking_title="North Title",
+        parsed_language="English",
+        tracking_language="Spanish",
+    )
+
+    assert result is None or not result.is_match
+    assert score == 0
+    assert breakdown["language"] == "mismatch"
+
+
+def test_missing_language_does_not_reject_an_exact_title():
+    """A tracking record with no language still accepts an exact title."""
+    matcher = TrackingMatcher()
+
+    score, _breakdown = matcher.match_to_tracking(
+        parsed_title="North Title",
+        tracking_title="North Title",
+        parsed_language="English",
+        tracking_language=None,
+    )
+
+    assert score >= 70
+
+
+def test_issue_metadata_does_not_split_the_same_magazine():
+    """Extra issue words still match when the edition variant is the same."""
+    matcher = TrackingMatcher()
+    tracking_records = [
+        MockTracking(1, "North Title", "English", None, CATEGORY_MAGAZINE),
+    ]
+
+    result = matcher.find_best_match(
+        parsed_title="North Title Special Edition",
+        tracking_records=tracking_records,
+        parsed_language="English",
+        parsed_category=CATEGORY_MAGAZINE,
+    )
+    score, match_type = matcher.calculate_title_score("North Title No 12", "North Title")
+    kids_score, kids_type = matcher.calculate_title_score("North Title Kids Issue 4", "North Title Kids")
+
+    assert result is not None
+    assert result.is_match
+    assert result.tracking_id == 1
+    assert score == 100
+    assert match_type == "containment"
+    assert kids_score == 100
+    assert kids_type == "containment"
+
+
+def test_a_different_edition_is_not_a_containment_match():
+    """Weekly and Kids are different magazines, not leftover issue words."""
+    matcher = TrackingMatcher()
+
+    weekly_score, weekly_type = matcher.calculate_title_score("North Title Weekly Issue 1", "North Title")
+    kids_score, kids_type = matcher.calculate_title_score("North Title Kids", "North Title")
+    numbers_score, numbers_type = matcher.calculate_title_score("12", "34")
+
+    assert weekly_score == 0
+    assert weekly_type != "containment"
+    assert kids_type != "containment"
+    assert numbers_score == 0
+    assert numbers_type != "containment"
+
+
 def test_exact_title_with_wrong_metadata_country_still_matches():
     """Test that exact title match with wrong metadata country still matches (bug fix)"""
     matcher = TrackingMatcher()

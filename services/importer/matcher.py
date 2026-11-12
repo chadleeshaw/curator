@@ -24,8 +24,25 @@ from core.constants.matching import (
     WEIGHT_TITLE_FUZZY_MEDIUM,
 )
 from core.constants.title import TITLE_SKIP_WORDS
+from core.parsers.title import TitleMatcher
 
 logger = logging.getLogger(__name__)
+
+# Issue words that may sit beside the magazine name.
+_ISSUE_WORDS = frozenset({"no", "issue", "vol", "volume", "magazine", "mag", "special", "edition", "seasons"})
+
+
+def _title_tokens(normalized: str) -> set[str]:
+    tokens = set()
+    for raw in normalized.split():
+        word = raw.strip(".,;:!?()[]{}\"'").lower()
+        if word:
+            tokens.add(word)
+    return tokens
+
+
+def _is_issue_metadata(word: str) -> bool:
+    return word.isdigit() or word in _ISSUE_WORDS
 
 
 @dataclass
@@ -55,6 +72,7 @@ class TrackingMatcher:
             min_score: Minimum score required to consider a match (0-100)
         """
         self.min_score = min_score
+        self._variant_matcher = TitleMatcher()
 
         # Common title prefixes/suffixes to strip for matching
         self.title_noise = [
@@ -171,6 +189,25 @@ class TrackingMatcher:
 
         return abbreviation
 
+    def _titles_share_issue_metadata(
+        self, norm_parsed: str, norm_tracking: str, parsed_title: str, tracking_title: str
+    ) -> bool:
+        """True when the titles are the same magazine plus issue words.
+
+        Weekly, Kids, and a different regional edition are not issue words.
+        """
+        parsed_tokens = _title_tokens(norm_parsed)
+        tracking_tokens = _title_tokens(norm_tracking)
+        shared = parsed_tokens & tracking_tokens
+        if not any(not _is_issue_metadata(word) for word in shared):
+            return False
+        extra = (parsed_tokens | tracking_tokens) - shared
+        if not extra or any(not _is_issue_metadata(word) for word in extra):
+            return False
+        parsed_variant = self._variant_matcher.extract_periodical_variant(parsed_title)
+        tracking_variant = self._variant_matcher.extract_periodical_variant(tracking_title)
+        return parsed_variant == tracking_variant
+
     def calculate_title_score(self, parsed_title: str, tracking_title: str) -> Tuple[int, str]:
         """
         Calculate similarity score between two titles.
@@ -206,6 +243,9 @@ class TrackingMatcher:
                     WEIGHT_TITLE_ABBREVIATION,
                     f"abbreviation ({norm_parsed} -> {tracking_title})",
                 )
+
+        if self._titles_share_issue_metadata(norm_parsed, norm_tracking, parsed_title, tracking_title):
+            return (WEIGHT_TITLE_EXACT, "containment")
 
         # Fuzzy matching
         fuzzy_score = fuzz.ratio(norm_parsed, norm_tracking)
@@ -261,19 +301,17 @@ class TrackingMatcher:
         breakdown["title_match_type"] = match_type
         total_score += title_score
 
-        # Language matching
+        # A different language is a different edition. An exact title still must not join it.
         if parsed_language and tracking_language:
-            # Normalize language (e.g., "English" == "english")
             norm_parsed_lang = parsed_language.lower().strip()
             norm_tracking_lang = tracking_language.lower().strip()
+            if norm_parsed_lang != norm_tracking_lang:
+                breakdown["language"] = "mismatch"
+                return (0, breakdown)
 
-            if norm_parsed_lang == norm_tracking_lang:
-                breakdown["language"] = WEIGHT_LANGUAGE_MATCH
-                total_score += WEIGHT_LANGUAGE_MATCH
-            else:
-                breakdown["language"] = 0
+            breakdown["language"] = WEIGHT_LANGUAGE_MATCH
+            total_score += WEIGHT_LANGUAGE_MATCH
         else:
-            # No language info, assume neutral
             breakdown["language"] = 0
 
         # Country matching

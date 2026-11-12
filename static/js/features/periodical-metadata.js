@@ -7,7 +7,11 @@
 
 import { APIClient, APIHelper } from '../core/api.js';
 import { CSS_CLASSES } from '../core/constants.js';
-import { getSpecialEditionValue, isSpecialEdition } from './periodical-rendering.js';
+import {
+  getSpecialEditionValue,
+  isSpecialEdition,
+  selectLanguage,
+} from './periodical-rendering.js';
 import { escapeHtml } from '../readers/reader-utils.js';
 import { UIUtils } from '../core/ui-utils.js';
 
@@ -22,7 +26,6 @@ let _state = null;
 export function initMetadata(state) {
   _state = state;
 }
-
 
 // ---------------------------------------------------------------------------
 // Metadata modal – view
@@ -327,18 +330,23 @@ export function enableMetadataEdit() {
 
   // Populate form fields
   const languageField = document.getElementById('edit-language');
-  languageField.value = _state.currentPeriodicalData.language || '';
+  selectLanguage(languageField, _state.currentPeriodicalData.language || '');
+  // Only a change the user makes sends the language on save.
+  delete languageField.dataset.changed;
+  languageField.onchange = () => {
+    languageField.dataset.changed = '1';
+  };
 
-  // Disable language if controlled by tracking
+  // Language on a tracked issue is the tracking language. Saving it updates
+  // every issue, so a copy labeled with the wrong language can be set back
+  // to English without a second tracking record.
   const languageContainer = document.getElementById('edit-language-container');
-  if (hasTracking) {
-    languageField.disabled = true;
-    languageContainer.title = 'Language is controlled by the tracking record';
-    languageContainer.style.opacity = '0.6';
-  } else {
-    languageField.disabled = false;
-    languageContainer.title = '';
-    languageContainer.style.opacity = '1';
+  const languageHint = document.getElementById('edit-language-hint');
+  languageField.disabled = false;
+  languageContainer.title = '';
+  languageContainer.style.opacity = '1';
+  if (languageHint) {
+    languageHint.classList.toggle(CSS_CLASSES.HIDDEN, !hasTracking);
   }
 
   // Year field - read from derived_metadata first, fall back to extra_metadata
@@ -542,9 +550,16 @@ export async function saveMetadataEdit() {
     volume: document.getElementById('edit-volume').value || null,
   };
 
-  // Only include tracking-controlled fields if issue is NOT linked to tracking
+  // Only include tracking-controlled fields if issue is NOT linked to tracking.
+  // Language is sent only when the user changed the dropdown: on a tracked
+  // issue it updates the tracking record and every issue of that magazine,
+  // and an empty value clears it.
+  const languageField = document.getElementById('edit-language');
+  const currentLanguage = _state.currentPeriodicalData.language || '';
+  if (languageField.dataset.changed && languageField.value !== currentLanguage) {
+    updates.language = languageField.value;
+  }
   if (!hasTracking) {
-    updates.language = document.getElementById('edit-language').value;
     updates.country = document.getElementById('edit-country').value || null;
   }
 
