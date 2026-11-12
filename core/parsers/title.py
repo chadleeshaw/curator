@@ -27,7 +27,7 @@ from core.constants.title import (
     KNOWN_PERIODICAL_TITLES,
     SPECIAL_EDITION_KEYWORDS,
 )
-from core.constants.date import MONTH_TO_NUMBER
+from core.constants.date import MONTH_TO_NUMBER, UNKNOWN_ISSUE_DATE_YEAR
 from core.parsers.language import LANGUAGE_INDICATORS
 
 logger = logging.getLogger(__name__)
@@ -231,6 +231,48 @@ def strip_issue_number_and_name(title: str) -> str:
     if stripped and re.search(r"[A-Za-z]", stripped):
         title = stripped
     return title.strip()
+
+
+# Vol 5, Volume 5, Vol. 5, V5. "Nov2024" is a month, not volume 2024.
+_VOLUME_RE = re.compile(r"\b(?:vol(?:ume)?\.?\s*|v)(\d{1,4})\b", re.IGNORECASE)
+# #123, Issue 123, No. 123, No 123. "Techno 5" is not issue 5.
+_ISSUE_RE = re.compile(r"(?:#|\bissue\s*|\bno\.?\s*)(\d{1,5})\b", re.IGNORECASE)
+
+
+def extract_volume_and_issue(title: str) -> Tuple[Optional[int], Optional[int]]:
+    """Volume and issue numbers from a title, either of which can be None."""
+    volume = _VOLUME_RE.search(title or "")
+    issue = _ISSUE_RE.search(title or "")
+    return (int(volume.group(1)) if volume else None, int(issue.group(1)) if issue else None)
+
+
+def as_issue_int(value) -> Optional[int]:
+    """A stored volume or issue number as an int, or None when it is not a plain number."""
+    text = str(value).strip() if value is not None else ""
+    return int(text) if text.isdigit() else None
+
+
+def _merge_numbers(numbers, title: str) -> Tuple[Optional[int], Optional[int]]:
+    """(volume, issue) from metadata, with each missing number taken from the title."""
+    volume, issue = numbers or (None, None)
+    title_volume, title_issue = extract_volume_and_issue(title)
+    return (volume if volume is not None else title_volume, issue if issue is not None else title_issue)
+
+
+def same_volume_and_issue(
+    left: Tuple[Optional[int], Optional[int]], right: Tuple[Optional[int], Optional[int]]
+) -> bool:
+    """True when two (volume, issue) pairs name the same issue.
+
+    The issue numbers have to agree, and so do the volumes: both the same, or
+    neither known. "No. 1" alone never matches "Vol. 30 No. 1", since every
+    volume has a No. 1.
+    """
+    left_volume, left_issue = left
+    right_volume, right_issue = right
+    if left_issue is None or left_issue != right_issue:
+        return False
+    return left_volume == right_volume
 
 
 class TitleMatcher:
@@ -663,29 +705,8 @@ class TitleMatcher:
         return is_match, score
 
     def _extract_issue_volume_from_title(self, title: str) -> Tuple[Optional[int], Optional[int]]:
-        """
-        Extract volume and issue numbers from title.
-
-        Args:
-            title: Title string to parse
-
-        Returns:
-            Tuple of (volume, issue) where either can be None
-        """
-        volume = None
-        issue = None
-
-        # Volume patterns: Vol 5, Volume 5, Vol. 5, V5, v5
-        volume_match = re.search(r"(?:vol(?:ume)?\.?\s*|v)(\d+)", title, re.IGNORECASE)
-        if volume_match:
-            volume = int(volume_match.group(1))
-
-        # Issue patterns: #123, Issue 123, No. 123, No 123
-        issue_match = re.search(r"(?:#|issue\s*|no\.?\s*)(\d+)", title, re.IGNORECASE)
-        if issue_match:
-            issue = int(issue_match.group(1))
-
-        return volume, issue
+        """Volume and issue numbers from a title, either of which can be None."""
+        return extract_volume_and_issue(title)
 
     def extract_periodical_variant(self, title: str) -> Optional[str]:
         """
@@ -766,8 +787,10 @@ class TitleMatcher:
         provider_title: str,
         provider_date: Optional[datetime],
         library_title: str,
-        library_date: datetime,
+        library_date: Optional[datetime],
         date_tolerance_days: int = DEFAULT_DATE_TOLERANCE_DAYS,
+        provider_numbers: Optional[Tuple[Optional[int], Optional[int]]] = None,
+        library_numbers: Optional[Tuple[Optional[int], Optional[int]]] = None,
     ) -> Tuple[bool, int]:
         """
         Check if provider result matches library item using fuzzy title + date range + volume/issue.
@@ -778,6 +801,11 @@ class TitleMatcher:
             library_title: Title from library
             library_date: Issue date from library
             date_tolerance_days: Days within month to consider match (default 7)
+            provider_numbers: (volume, issue) from the result's metadata, used before the title
+            library_numbers: (volume, issue) from the library copy's metadata, used before the title
+
+        A library date in the 1900 sentinel year means the copy has no date, so
+        volume and issue numbers decide.
 
         Returns:
             Tuple of (is_match: bool, confidence_score: int)
@@ -817,8 +845,11 @@ class TitleMatcher:
             return (False, 0)
 
         # Step 2: Extract volume/issue numbers from both titles
-        provider_vol, provider_issue = self._extract_issue_volume_from_title(provider_title)
-        library_vol, library_issue = self._extract_issue_volume_from_title(library_title)
+        # Stored metadata wins; the title fills in whatever it doesn't have.
+        provider_vol, provider_issue = _merge_numbers(provider_numbers, provider_title)
+        library_vol, library_issue = _merge_numbers(library_numbers, library_title)
+        if library_date is not None and library_date.year == UNKNOWN_ISSUE_DATE_YEAR:
+            library_date = None
 
         # Step 3: Check volume/issue match if both have them
         if provider_vol is not None and library_vol is not None:
@@ -834,33 +865,22 @@ class TitleMatcher:
                 return (False, 0)
 
         # Step 4: Date range matching (if dates available)
-        if provider_date is None:
-            # No date provided - if we have matching volume/issue numbers, that's sufficient even
-            # when the raw fuzzy title score is below threshold (e.g. "Comic Issue 123" vs
-            # "Comic #123" score 72 < 80, but issue numbers match and base titles are similar).
-            issue_vol_match = (provider_vol is not None and provider_vol == library_vol) or (
-                provider_issue is not None and provider_issue == library_issue
-            )
-            if issue_vol_match:
-                # Verify base titles (stripped of issue/volume tokens) are also similar
-                _issue_vol_re = re.compile(
-                    r"(?:#|issue\s*|no\.?\s*)\d+|(?:vol(?:ume)?\.?\s*|v)\d+",
-                    re.IGNORECASE,
-                )
-                base_provider = _issue_vol_re.sub("", provider_title).strip()
-                base_library = _issue_vol_re.sub("", library_title).strip()
-                base_score = int(fuzz.token_set_ratio(base_provider.lower(), base_library.lower()))
-                ISSUE_MATCH_BASE_THRESHOLD = 60
-                if base_score >= ISSUE_MATCH_BASE_THRESHOLD:
-                    logger.debug(f"Match by volume/issue (base score {base_score}): {provider_title}")
-                    return (True, base_score)
-
-            # Fuzzy title threshold still applies when no issue/volume match available
-            if not is_title_match:
+        if provider_date is None or library_date is None:
+            # Without a date on both sides only volume and issue numbers can tell
+            # one issue from another. Matching numbers are enough even when the
+            # raw fuzzy score is below threshold ("Comic Issue 123" vs "Comic #123"
+            # scores 72), as long as the titles without the numbers are similar.
+            # Without numbers there is no match: a bare title would match every issue.
+            if not same_volume_and_issue((provider_vol, provider_issue), (library_vol, library_issue)):
                 return (False, 0)
-            # Otherwise rely on title match only
-            logger.debug(f"No date or volume/issue for '{provider_title}', using title-only match")
-            return (True, title_score)
+            base_provider = _ISSUE_RE.sub("", _VOLUME_RE.sub("", provider_title)).strip()
+            base_library = _ISSUE_RE.sub("", _VOLUME_RE.sub("", library_title)).strip()
+            base_score = int(fuzz.token_set_ratio(base_provider.lower(), base_library.lower()))
+            ISSUE_MATCH_BASE_THRESHOLD = 60
+            if base_score >= ISSUE_MATCH_BASE_THRESHOLD:
+                logger.debug(f"Match by volume/issue (base score {base_score}): {provider_title}")
+                return (True, base_score)
+            return (False, 0)
 
         # Fuzzy title must pass threshold before proceeding to date comparison
         if not is_title_match:

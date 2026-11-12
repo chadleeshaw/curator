@@ -18,6 +18,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
+from core.parsers.title import as_issue_int, extract_volume_and_issue, same_volume_and_issue
 from core.utils.date_precision import precision_for_existing_row
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from services.cache.provider_cache import INDEXER_REJECTION_ERROR
@@ -26,7 +27,7 @@ from core.constants.app import (
     MAX_ERROR_LENGTH,
     NEW_ISSUE_THRESHOLD_DAYS,
 )
-from core.constants.date import DATE_PRECISION_DAY, DATE_PRECISION_YEAR
+from core.constants.date import DATE_PRECISION_DAY, DATE_PRECISION_YEAR, UNKNOWN_ISSUE_DATE_YEAR
 from core.constants.country import (
     FULL_NAME_COUNTRY_CODES,
     ISO_COUNTRIES,
@@ -222,6 +223,21 @@ def _issue_number_of(record) -> Optional[str]:
     )
 
 
+def volume_and_issue_of(record):
+    """(volume, issue) from stored metadata, with each missing number taken from the title."""
+    sources = _metadata_sources(record)
+    volume = as_issue_int(_first_present(sources, "volume"))
+    issue = as_issue_int(_issue_number_of(record))
+    title_volume, title_issue = extract_volume_and_issue(getattr(record, "title", None) or "")
+    return (volume if volume is not None else title_volume, issue if issue is not None else title_issue)
+
+
+def _has_real_date(record) -> bool:
+    """False for no date and for the 1900 sentinel a volume-only library copy is stored with."""
+    issue_date = getattr(record, "issue_date", None)
+    return bool(issue_date) and issue_date.year != UNKNOWN_ISSUE_DATE_YEAR
+
+
 def _editions_conflict(left: Optional[str], right: Optional[str]) -> bool:
     """True when both sides name an edition and they are not the same one.
 
@@ -257,6 +273,11 @@ def _same_library_issue(issue: DiscoveredIssue, magazine: Periodical) -> bool:
     wanted_number = _issue_number_of(issue)
     owned_number = _issue_number_of(magazine)
     if wanted_number and owned_number and wanted_number.lower() != owned_number.lower():
+        return False
+
+    wanted_volume, _ = volume_and_issue_of(issue)
+    owned_volume, _ = volume_and_issue_of(magazine)
+    if wanted_volume is not None and owned_volume is not None and wanted_volume != owned_volume:
         return False
 
     if _editions_conflict(_edition_of(issue), _edition_of(magazine)):
@@ -565,6 +586,7 @@ class IssueDiscoveryService:
             extra_metadata={
                 "raw_title": title,
                 "base_title": parsed.base_title,
+                "volume": parsed.raw_metadata.get("volume"),
                 "is_special_edition": parsed.is_special_edition,
                 "special_edition_name": parsed.special_edition_name,
             },
@@ -1041,8 +1063,10 @@ class IssueDiscoveryService:
         day, including the 1st. Two month-only issues in that month are the
         same copy unless the issue number or edition differs.
 
-        If either side has no date, fall back to the fuzzy group id, which
-        compares normalized titles.
+        If either side has no real date (the 1900 sentinel counts as none),
+        matching volume and issue numbers decide, read from stored metadata
+        first and the title second. After that, fall back to the fuzzy group
+        id, which compares normalized titles.
 
         Args:
             issue: DiscoveredIssue to check
@@ -1062,6 +1086,20 @@ class IssueDiscoveryService:
                 if _same_library_issue(issue, mag):
                     owned = _as_date(mag.issue_date)
                     logger.debug(f"Library already has {owned.year}-{owned.month:02d}: {issue.title}")
+                    return mag.id
+
+        # When either side has no real date, the volume and issue numbers
+        # decide: an indexer listing "Vol 30 No 1" is the dated library copy
+        # whose metadata says volume 30, issue 1, and the reverse.
+        wanted = volume_and_issue_of(issue)
+        if wanted[1] is not None:
+            for mag in existing:
+                if _has_real_date(issue) and _has_real_date(mag):
+                    continue
+                if same_volume_and_issue(wanted, volume_and_issue_of(mag)) and not _editions_conflict(
+                    _edition_of(issue), _edition_of(mag)
+                ):
+                    logger.debug(f"Library already has volume {wanted[0]} issue {wanted[1]}: {issue.title}")
                     return mag.id
 
         if issue.fuzzy_match_group:

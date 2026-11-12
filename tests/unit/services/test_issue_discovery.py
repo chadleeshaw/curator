@@ -963,3 +963,56 @@ class TestFailedIssueUrlRefresh:
 
         assert existing.latest_url == "http://indexer.example/old"
         assert existing.download_status == DownloadStatus.PERMANENTLY_FAILED
+
+
+class TestVolumeAndIssueLibraryMatch:
+    """An indexer listing by volume finds the library copy that knows its volume."""
+
+    def _evaluate(self, session_factory, service, library_copy, result_title, pubdate=None):
+        session = session_factory()
+        tracking = PeriodicalTracking(olid="test-mag", title="Test Magazine", track_all_editions=True, user_id=1)
+        session.add(tracking)
+        session.commit()
+        session.add(Periodical(tracking_id=tracking.id, user_id=1, file_path="/path/to/copy.pdf", **library_copy))
+        session.commit()
+        result = {"title": result_title, "url": "http://example.com/a.nzb", "provider": "TestProvider", "guid": "g1"}
+        if pubdate:
+            result["pubdate"] = pubdate
+        service.record_search_results(tracking_id=tracking.id, search_results=[result], session=session)
+        stats = service.evaluate_discovered_issues(tracking_id=tracking.id, session=session)
+        session.close()
+        return stats["already_have"]
+
+    def test_undated_volume_listing_matches_a_dated_copy(self, test_db, issue_discovery_service):
+        dated_copy = {
+            "title": "Test Magazine",
+            "issue_date": datetime(2024, 1, 1),
+            "derived_metadata": {"volume": {"value": 30}, "issue_number": {"value": "1"}},
+        }
+        _, session_factory = test_db
+        assert self._evaluate(session_factory, issue_discovery_service, dated_copy, "Test Magazine Vol 30 No 1") == 1
+
+    def test_a_different_volume_is_not_owned(self, test_db, issue_discovery_service):
+        dated_copy = {
+            "title": "Test Magazine",
+            "issue_date": datetime(2024, 1, 1),
+            "derived_metadata": {"volume": {"value": 30}, "issue_number": {"value": "1"}},
+        }
+        _, session_factory = test_db
+        assert self._evaluate(session_factory, issue_discovery_service, dated_copy, "Test Magazine Vol 31 No 1") == 0
+
+    def test_dated_listing_matches_an_undated_copy_by_volume(self, test_db, issue_discovery_service):
+        undated_copy = {
+            "title": "Test Magazine",
+            "issue_date": datetime(1900, 1, 1),
+            "derived_metadata": {"volume": {"value": 30}, "issue_number": {"value": "1"}},
+        }
+        _, session_factory = test_db
+        owned = self._evaluate(
+            session_factory,
+            issue_discovery_service,
+            undated_copy,
+            "Test Magazine Vol 30 No 1 January 2024",
+            pubdate="2024-01-15T10:30:00Z",
+        )
+        assert owned == 1

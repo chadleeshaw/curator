@@ -403,3 +403,65 @@ def test_format_indicator_not_detected():
     # "Digital" at end is format metadata, not edition variant
     variant = matcher.extract_periodical_variant("Wired Magazine 2024 Digital")
     assert variant is None, f"'Digital' at end should not be variant, got: {variant}"
+
+
+def test_month_and_word_endings_are_not_volume_or_issue():
+    from core.parsers.title import extract_volume_and_issue
+
+    assert extract_volume_and_issue("Wired Nov2024") == (None, None)
+    assert extract_volume_and_issue("Techno 5") == (None, None)
+    assert extract_volume_and_issue("Wired Vol.30 No 1") == (30, 1)
+
+
+def test_library_metadata_volume_matches_an_undated_listing():
+    """The library title has no numbers; its stored metadata does."""
+    matcher = TitleMatcher()
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired Vol 30 No 1",
+        provider_date=None,
+        library_title="Wired",
+        library_date=datetime(2024, 1, 1),
+        library_numbers=(30, 1),
+    )
+    assert is_match is True
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired Vol 30 No 2",
+        provider_date=None,
+        library_title="Wired",
+        library_date=datetime(2024, 1, 1),
+        library_numbers=(30, 1),
+    )
+    assert is_match is False
+
+
+def test_undated_matching_needs_volume_and_issue_numbers():
+    """A 1900 library copy or an undated listing never matches on title alone."""
+    matcher = TitleMatcher()
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired",
+        provider_date=None,
+        library_title="Wired",
+        library_date=datetime(2024, 1, 1),
+    )
+    assert is_match is False
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired January 2024",
+        provider_date=datetime(2024, 1, 15),
+        library_title="Wired",
+        library_date=datetime(1900, 1, 1),
+        library_numbers=(30, 1),
+    )
+    assert is_match is False
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired Vol 30 No 1 January 2024",
+        provider_date=datetime(2024, 1, 15),
+        library_title="Wired",
+        library_date=datetime(1900, 1, 1),
+        library_numbers=(30, 1),
+    )
+    assert is_match is True

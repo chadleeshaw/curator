@@ -14,12 +14,32 @@ from sqlalchemy import or_
 from core.constants.date import NUMBER_TO_MONTH
 from core.parsers import utc_now
 from models.database import DownloadSubmission
+from services.issue_discovery import volume_and_issue_of
 
+from core.parsers.title import as_issue_int
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from .dependencies import get_title_matcher
 from .filters import filter_by_language_and_country
 
 logger = logging.getLogger(__name__)
+
+
+def _result_numbers(result):
+    """(volume, issue) parsed from an indexer result's title, either of which can be None."""
+    raw = result.get("raw_metadata") or {}
+    return as_issue_int(raw.get("volume")), as_issue_int(raw.get("issue"))
+
+
+def _as_datetime(value) -> Optional[datetime]:
+    """A result's publication date as a datetime, or None."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
 
 
 def deduplicate_against_library(
@@ -42,18 +62,23 @@ def deduplicate_against_library(
     """
     deduplicated = []
     title_matcher = get_title_matcher()
+    library_numbers = {lib_item.id: volume_and_issue_of(lib_item) for lib_item in library_items}
 
     for result in results:
         matched_library_item = None
+        provider_numbers = _result_numbers(result)
 
         for lib_item in library_items:
-            if result.get("publication_date") and title_matcher:
+            # A result with no date can still match by volume and issue number
+            if title_matcher:
                 is_match, score = title_matcher.matches_library_item_with_date_range(
                     provider_title=result["title"],
-                    provider_date=result["publication_date"],
+                    provider_date=_as_datetime(result.get("publication_date")),
                     library_title=lib_item.title,
                     library_date=lib_item.issue_date,
                     date_tolerance_days=7,
+                    provider_numbers=provider_numbers,
+                    library_numbers=library_numbers[lib_item.id],
                 )
 
                 if is_match:
