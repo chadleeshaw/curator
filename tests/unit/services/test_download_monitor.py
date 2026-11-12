@@ -1088,7 +1088,7 @@ class TestImportRetry:
 
     @pytest.mark.asyncio
     async def test_missing_file_removes_client_history(self, test_db, tmp_path, download_manager, mock_file_importer):
-        """A completed download whose file is gone is removed from the client."""
+        """The first missing file is a path-mapping retry. The second removes the client job."""
         from models.database import DownloadSubmission, PeriodicalTracking
 
         _, session_factory = test_db
@@ -1125,6 +1125,13 @@ class TestImportRetry:
             downloads_dir=downloads_dir,
         )
         monitor._delete_from_client = Mock()
+
+        monitor._process_completed_downloads(session)
+
+        monitor._delete_from_client.assert_not_called()
+        session.refresh(submission)
+        assert submission.status == DownloadSubmission.StatusEnum.COMPLETED
+        assert submission.last_error.startswith("File not found in downloads directory:")
 
         monitor._process_completed_downloads(session)
 
