@@ -108,11 +108,11 @@ def test_chown_is_skipped_when_the_tree_already_matches(tmp_path):
     env["PUID"] = str(os.getuid())
     env["PGID"] = str(os.getgid())
     env["DATA_DIRS"] = str(data)
-    script = f'''
+    script = f"""
     source "{ENTRYPOINT}"
     chown() {{ printf '%s\\n' "$*" >> "{log}"; }}
     prepare_runtime_user
-    '''
+    """
     result = subprocess.run(["bash", "-c", script], cwd=ROOT, env=env, check=False, capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
