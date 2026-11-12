@@ -16,7 +16,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from core import constants
 from core.config import ConfigLoader
 from core.constants.app import DB_COMMIT_RETRY_DELAY, DB_LOCK_RETRY_MAX
-from core.constants.ocr import PNG_GENERATION_TIMEOUT
+from core.constants.ocr import MAX_OCR_RETRIES, PNG_GENERATION_TIMEOUT
 from models.database import OCRJob, Periodical
 from .service import OCRService
 
@@ -450,14 +450,15 @@ class OCRQueueService:
         logger.info(f"Queued OCR job {job.id} for periodical {periodical_id} (priority={priority})")
         return job
 
-    def process_queue(self, db: Session, batch_size: int = 1, max_retries: int = 1) -> Dict[str, int]:
+    def process_queue(self, db: Session, batch_size: int = 1, max_retries: int = MAX_OCR_RETRIES) -> Dict[str, int]:
         """
         Process pending OCR jobs from the queue in batches.
 
         Args:
             db: Database session
             batch_size: Maximum number of jobs to process at once
-            max_retries: Maximum number of retry attempts
+            max_retries: Attempts allowed for a job, including the first try.
+                The scheduler passes MAX_OCR_RETRIES so an image timeout is retried.
 
         Returns:
             Dictionary with processing statistics

@@ -456,3 +456,43 @@ class TestOcrTimeoutCountsAsAnAttempt:
         assert job.attempt_count == 2
         assert job.last_error == "OCR image generation timed out"
         session.close()
+
+    def test_a_timeout_retries_with_the_scheduler_limit(self, test_db, tmp_path, monkeypatch):
+        from core.constants.app import MAX_DOWNLOAD_RETRIES
+        from core.constants.ocr import MAX_OCR_RETRIES
+
+        _, session_factory = test_db
+        session = session_factory()
+        pdf_path = tmp_path / "issue.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4")
+        magazine = Periodical(
+            title="Test Magazine",
+            issue_date=datetime(2024, 1, 1),
+            file_path=str(pdf_path),
+            user_id=1,
+        )
+        session.add(magazine)
+        session.commit()
+        job = OCRJob(periodical_id=magazine.id, status=OCRJob.StatusEnum.PENDING, attempt_count=0)
+        session.add(job)
+        session.commit()
+
+        def timeout(jobs, timeout=120):
+            return {item["periodical_id"]: "timeout" for item in jobs}
+
+        monkeypatch.setattr("services.ocr.queue._generate_pngs_parallel", timeout)
+        monkeypatch.setattr("services.ocr.queue.ConfigLoader", MagicMock())
+        service = OCRQueueService()
+
+        assert MAX_OCR_RETRIES > MAX_DOWNLOAD_RETRIES
+        for attempt in range(1, MAX_OCR_RETRIES):
+            service.process_queue(session, batch_size=1, max_retries=MAX_OCR_RETRIES)
+            session.refresh(job)
+            assert job.status == OCRJob.StatusEnum.PENDING
+            assert job.attempt_count == attempt
+
+        service.process_queue(session, batch_size=1, max_retries=MAX_OCR_RETRIES)
+        session.refresh(job)
+        assert job.status == OCRJob.StatusEnum.FAILED
+        assert job.attempt_count == MAX_OCR_RETRIES
+        session.close()
