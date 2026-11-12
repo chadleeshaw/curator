@@ -242,6 +242,22 @@ class TestWeekliesAndSpecialsAreDistinctIssues:
         assert wanted.download_status == DownloadStatus.WANTED
         session.close()
 
+    def test_a_named_special_is_not_an_unnamed_special(self, test_db, issue_discovery_service):
+        _, session_factory = test_db
+        session = session_factory()
+        tracking = _tracking(session, title="City Paper")
+        owned, wanted = self._pair(session, tracking, datetime(2024, 1, 15), datetime(2024, 1, 15))
+        owned.extra_metadata = {"is_special_edition": True}
+        wanted.extra_metadata = {"is_special_edition": True, "special_edition_name": "Holiday Special"}
+        session.commit()
+
+        stats = issue_discovery_service.evaluate_discovered_issues(tracking.id, session)
+
+        session.refresh(wanted)
+        assert stats["already_have"] == 0
+        assert wanted.download_status == DownloadStatus.WANTED
+        session.close()
+
     def test_the_same_special_edition_is_already_owned(self, test_db, issue_discovery_service):
         _, session_factory = test_db
         session = session_factory()

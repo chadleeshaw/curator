@@ -222,8 +222,13 @@ def _editions_conflict(left: Optional[str], right: Optional[str]) -> bool:
         return bool(key) and key != "regular"
 
     if _special(left) and _special(right):
-        return left != right and left not in right and right not in left
+        return _normalize_edition(left) != _normalize_edition(right)
     return _special(left) or _special(right)
+
+
+def _normalize_edition(key: str) -> str:
+    """Collapse case and spacing so two names of one edition compare equal."""
+    return " ".join(key.lower().split())
 
 
 def _same_library_issue(issue: DiscoveredIssue, magazine: Periodical) -> bool:
