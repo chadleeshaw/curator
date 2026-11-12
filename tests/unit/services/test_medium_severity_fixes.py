@@ -379,7 +379,7 @@ class TestNzbProviderRedirects:
         assert kwargs.get("follow_redirects") is True, "follow_redirects=True must be passed to httpx.get"
 
     def test_get_nzb_content_still_raises_on_real_errors(self, tmp_path):
-        """Non-redirect errors (404, 500) should still propagate as exceptions."""
+        """A 404 is a rejected URL. 429 and 5xx are retried instead."""
         import httpx as _httpx
 
         db_path = str(tmp_path / "cache.db")

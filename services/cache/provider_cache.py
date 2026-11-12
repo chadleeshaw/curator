@@ -59,6 +59,16 @@ def _url_for_log(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}{parts.path}"
 
 
+def _status_is_rejected(status_code) -> bool:
+    """A 4xx other than 429 will not succeed on a later try.
+
+    429 and 5xx are rate limits and indexer outages. The same URL is worth
+    fetching again, so those stay transient instead of being recorded as a
+    rejected NZB.
+    """
+    return isinstance(status_code, int) and 400 <= status_code < 500 and status_code != 429
+
+
 class NzbCacheService:
     """
     Caches NZB file content to avoid provider rate limits.
@@ -160,8 +170,11 @@ class NzbCacheService:
             NZB XML content as string, or None if unavailable
 
         Raises:
-            NzbContentRejected: The provider responded with something other than an NZB.
-                The body is not cached. Callers must not submit the URL instead.
+            NzbContentRejected: The provider responded with something other than an NZB,
+                or with a 4xx other than 429. The body is not cached. Callers must not
+                submit the URL instead.
+
+            429 and 5xx are transient: this returns None so the caller can retry later.
         """
         # Skip non-URL identifiers (e.g. Internet Archive slugs like "magazine-2008-13")
         if not download_url.startswith(("http://", "https://")):
@@ -225,9 +238,11 @@ class NzbCacheService:
             return nzb_content
 
         except httpx.HTTPStatusError as exc:
-            status_code = getattr(exc.response, "status_code", "error")
+            status_code = getattr(exc.response, "status_code", None)
             logger.warning(f"Indexer returned HTTP {status_code} from {_url_for_log(download_url)}")
-            raise NzbContentRejected(f"HTTP {status_code}") from exc
+            if _status_is_rejected(status_code):
+                raise NzbContentRejected(f"HTTP {status_code}") from exc
+            return None
 
         except httpx.HTTPError as e:
             logger.error(f"Failed to fetch NZB from {_url_for_log(download_url)}: {e}")

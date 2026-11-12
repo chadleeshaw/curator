@@ -109,6 +109,40 @@ class TestNzbContentRejected:
         assert client.submitted_content is None
 
 
+class TestHttpStatusIsRejectedOnlyForClientErrors:
+    """429 and 5xx leave the URL for a later try. Other 4xx do not."""
+
+    def _status_error(self, status_code):
+        response = _response("")
+        response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            f"HTTP {status_code}",
+            request=MagicMock(),
+            response=MagicMock(status_code=status_code),
+        )
+        return response
+
+    @pytest.mark.parametrize("status_code", [429, 503])
+    def test_rate_limits_and_server_errors_are_transient(self, tmp_path, status_code):
+        service = NzbCacheService(cache_db_path=str(tmp_path / "cache.db"))
+
+        with patch("services.cache.provider_cache.httpx.get", return_value=self._status_error(status_code)):
+            assert service.get_nzb_content(DOWNLOAD_URL) is None
+
+        client = _ContentClient()
+        with patch("services.cache.provider_cache.httpx.get", return_value=self._status_error(status_code)):
+            job_id = submit_with_nzb_content(client, DOWNLOAD_URL, "Issue", nzb_cache_service=service)
+
+        assert job_id == "url-job"
+        assert client.submitted_url == DOWNLOAD_URL
+
+    def test_not_found_is_rejected(self, tmp_path):
+        service = NzbCacheService(cache_db_path=str(tmp_path / "cache.db"))
+
+        with patch("services.cache.provider_cache.httpx.get", return_value=self._status_error(404)):
+            with pytest.raises(NzbContentRejected, match="HTTP 404"):
+                service.get_nzb_content(DOWNLOAD_URL)
+
+
 class TestTorrentGrabsSkipTheNzbCache:
     """qBittorrent implements submit_content, but a .torrent URL is not an NZB."""
 
