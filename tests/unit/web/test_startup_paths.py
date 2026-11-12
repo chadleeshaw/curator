@@ -26,8 +26,10 @@ from web.background_tasks import (
 from web.app import (
     _initialize_background_tasks,
     _initialize_cache_services,
+    _initialize_core_services,
     _initialize_download_client,
     _initialize_search_providers,
+    app,
     app_state,
 )
 from web.routers.auth import get_verify_token
@@ -279,8 +281,11 @@ def test_startup_helpers_load_providers_and_clients_from_config():
         _initialize_download_client()
         _initialize_cache_services()
         _initialize_background_tasks()
+        _initialize_core_services()
         assert isinstance(app_state.search_providers, list)
         assert isinstance(app_state.download_clients, dict)
+        assert app_state.file_importer is not None
+        assert app_state.issue_discovery_service is not None
     finally:
         providers.clear()
         providers.extend(saved_providers)
@@ -290,6 +295,15 @@ def test_startup_helpers_load_providers_and_clients_from_config():
         app_state.nzb_cache_service = saved_cache
         app_state.download_monitor_task = saved_monitor
         app_state.ocr_processor_task = saved_ocr
+
+
+def test_health_reports_whether_the_database_answers():
+    with TestClient(app) as client:
+        response = client.get("/api/health")
+        oversized = client.post("/api/health", headers={"content-length": str(60 * 1024 * 1024)}, content=b"")
+    assert response.status_code in (200, 503)
+    assert response.json()["service"] == "curator"
+    assert oversized.status_code == 413
 
 
 def test_manual_metadata_edit_sets_month_precision(session):
