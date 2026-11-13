@@ -1016,3 +1016,37 @@ class TestVolumeAndIssueLibraryMatch:
             pubdate="2024-01-15T10:30:00Z",
         )
         assert owned == 1
+
+    def test_both_dated_in_different_months_match_by_volume(self, test_db, issue_discovery_service):
+        """The listing's date is a post date; the copy's date came from OCR."""
+        ocr_dated_copy = {
+            "title": "Test Magazine",
+            "issue_date": datetime(2024, 1, 1),
+            "derived_metadata": {"volume": {"value": 30}, "issue_number": {"value": "1"}},
+        }
+        _, session_factory = test_db
+        owned = self._evaluate(
+            session_factory,
+            issue_discovery_service,
+            ocr_dated_copy,
+            "Test Magazine Vol 30 No 1",
+            pubdate="2024-03-20T10:30:00Z",
+        )
+        assert owned == 1
+
+    def test_issue_number_alone_in_another_year_is_not_owned(self, test_db, issue_discovery_service):
+        """With no volume, No. 3 of 2023 is not No. 3 of 2024."""
+        copy = {
+            "title": "Test Magazine",
+            "issue_date": datetime(2023, 3, 1),
+            "derived_metadata": {"issue_number": {"value": "3"}},
+        }
+        _, session_factory = test_db
+        owned = self._evaluate(
+            session_factory,
+            issue_discovery_service,
+            copy,
+            "Test Magazine No 3 March 2024",
+            pubdate="2024-03-20T10:30:00Z",
+        )
+        assert owned == 0

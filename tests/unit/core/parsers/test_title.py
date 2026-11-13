@@ -465,3 +465,38 @@ def test_undated_matching_needs_volume_and_issue_numbers():
         library_numbers=(30, 1),
     )
     assert is_match is True
+
+
+def test_volume_and_issue_decide_before_dates():
+    """A listing posted in March is the January copy when the volume and issue agree."""
+    matcher = TitleMatcher()
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired Vol 30 No 1",
+        provider_date=datetime(2024, 3, 20),
+        library_title="Wired",
+        library_date=datetime(2024, 1, 1),
+        library_numbers=(30, 1),
+    )
+    assert is_match is True
+
+    is_match, _ = matcher.matches_library_item_with_date_range(
+        provider_title="Wired Vol 30 No 2 January 2024",
+        provider_date=datetime(2024, 1, 15),
+        library_title="Wired",
+        library_date=datetime(2024, 1, 1),
+        library_numbers=(30, 1),
+    )
+    assert is_match is False
+
+
+def test_numbers_decide():
+    from core.parsers.title import numbers_decide
+
+    assert numbers_decide((30, 1), (30, 1)) is True
+    assert numbers_decide((30, 1), (31, 1)) is False
+    assert numbers_decide((None, 3), (None, 3), 2024, 2024) is True
+    assert numbers_decide((None, 3), (None, 3), 2023, 2024) is False
+    assert numbers_decide((None, 3), (None, 3), None, 2024) is True
+    assert numbers_decide((30, 3), (None, 3)) is None
+    assert numbers_decide((30, None), (30, 1)) is None

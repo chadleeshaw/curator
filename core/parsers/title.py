@@ -259,20 +259,33 @@ def _merge_numbers(numbers, title: str) -> Tuple[Optional[int], Optional[int]]:
     return (volume if volume is not None else title_volume, issue if issue is not None else title_issue)
 
 
-def same_volume_and_issue(
-    left: Tuple[Optional[int], Optional[int]], right: Tuple[Optional[int], Optional[int]]
-) -> bool:
-    """True when two (volume, issue) pairs name the same issue.
+def numbers_decide(
+    left: Tuple[Optional[int], Optional[int]],
+    right: Tuple[Optional[int], Optional[int]],
+    left_year: Optional[int] = None,
+    right_year: Optional[int] = None,
+) -> Optional[bool]:
+    """Whether two (volume, issue) pairs settle if they are the same issue.
 
-    The issue numbers have to agree, and so do the volumes: both the same, or
-    neither known. "No. 1" alone never matches "Vol. 30 No. 1", since every
-    volume has a No. 1.
+    Checked before dates, since an indexer's date is often a post date while a
+    library copy's date came from OCR. Returns True or False when the numbers
+    decide, and None when they can't (an issue number is missing, or only one
+    side knows its volume), so dates decide instead.
+
+    With no volume on either side, a matching issue number in two different
+    years is not the same issue: some magazines restart numbering every year.
     """
     left_volume, left_issue = left
     right_volume, right_issue = right
-    if left_issue is None or left_issue != right_issue:
-        return False
-    return left_volume == right_volume
+    if left_issue is None or right_issue is None:
+        return None
+    if left_volume is not None and right_volume is not None:
+        return left_volume == right_volume and left_issue == right_issue
+    if left_volume is None and right_volume is None:
+        if left_issue != right_issue:
+            return False
+        return not (left_year and right_year and left_year != right_year)
+    return None
 
 
 class TitleMatcher:
@@ -864,15 +877,20 @@ class TitleMatcher:
                 logger.debug(f"Issue mismatch: provider issue {provider_issue} vs library issue {library_issue}")
                 return (False, 0)
 
-        # Step 4: Date range matching (if dates available)
-        if provider_date is None or library_date is None:
-            # Without a date on both sides only volume and issue numbers can tell
-            # one issue from another. Matching numbers are enough even when the
-            # raw fuzzy score is below threshold ("Comic Issue 123" vs "Comic #123"
-            # scores 72), as long as the titles without the numbers are similar.
-            # Without numbers there is no match: a bare title would match every issue.
-            if not same_volume_and_issue((provider_vol, provider_issue), (library_vol, library_issue)):
-                return (False, 0)
+        # Step 4: Volume and issue numbers come before dates. An indexer's date
+        # is often a post date, while the library copy's date came from OCR.
+        decided = numbers_decide(
+            (provider_vol, provider_issue),
+            (library_vol, library_issue),
+            provider_date.year if provider_date else None,
+            library_date.year if library_date else None,
+        )
+        if decided is False:
+            return (False, 0)
+        if decided:
+            # Matching numbers are enough even when the raw fuzzy score is below
+            # threshold ("Comic Issue 123" vs "Comic #123" scores 72), as long as
+            # the titles without the numbers are similar.
             base_provider = _ISSUE_RE.sub("", _VOLUME_RE.sub("", provider_title)).strip()
             base_library = _ISSUE_RE.sub("", _VOLUME_RE.sub("", library_title)).strip()
             base_score = int(fuzz.token_set_ratio(base_provider.lower(), base_library.lower()))
@@ -880,6 +898,11 @@ class TitleMatcher:
             if base_score >= ISSUE_MATCH_BASE_THRESHOLD:
                 logger.debug(f"Match by volume/issue (base score {base_score}): {provider_title}")
                 return (True, base_score)
+            return (False, 0)
+
+        # Step 5: Date range matching. Without numbers and without a date on both
+        # sides nothing tells one issue from another, so a bare title never matches.
+        if provider_date is None or library_date is None:
             return (False, 0)
 
         # Fuzzy title must pass threshold before proceeding to date comparison
